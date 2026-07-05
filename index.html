@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Sicilia 2026 · Viaje familiar</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root{--bg:#0a1120;--panel:#0f1a2c;--panel2:#13233b;--line:#22304a;--txt:#eef4fb;--muted:#93a4bb;--accent:#38bdf8;--gold:#e9b949;--safe-b:env(safe-area-inset-bottom,0px)}
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased}
+  #app{display:flex;height:100vh;height:100dvh;overflow:hidden}
+  #panel{width:400px;min-width:400px;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden;position:relative;z-index:1300}
+  #sheetHandle{display:none}
+  #panelHead{padding:16px 20px 12px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#12213a 0%,var(--panel) 100%)}
+  .brand{display:flex;align-items:center;gap:10px}
+  .brand .flag{font-size:22px}
+  .brand h1{font-size:19px;margin:0;letter-spacing:.2px;font-weight:700}
+  .brand .sub{color:var(--muted);font-size:12px;margin-top:2px}
+  .stats{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}
+  .stat{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:5px 9px;font-size:11.5px;color:var(--muted)}
+  .stat b{color:var(--txt);font-weight:700}
+  .seg{display:flex;gap:4px;margin-top:13px;background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:4px}
+  .seg button{flex:1;border:0;background:transparent;color:var(--muted);font-size:13px;font-weight:600;padding:9px 6px;border-radius:8px;cursor:pointer;transition:.18s;font-family:inherit}
+  .seg button.on{background:linear-gradient(135deg,var(--accent),#0ea5e9);color:#06263b;box-shadow:0 2px 10px rgba(56,189,248,.35)}
+  #panelBody{overflow-y:auto;flex:1;padding:14px 14px calc(24px + var(--safe-b))}
+
+  /* Bases view */
+  .endpoints{display:flex;gap:8px;margin-bottom:10px}
+  .ep{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:9px 11px}
+  .ep .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);display:flex;align-items:center;gap:5px}
+  .ep .val{font-size:13.5px;font-weight:700;margin-top:3px}
+  .ep .day{font-size:11px;color:var(--muted);margin-top:1px}
+  .note{display:flex;gap:9px;align-items:flex-start;border-radius:11px;padding:10px 12px;font-size:12px;line-height:1.5;margin-bottom:11px}
+  .note.luggage{background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.28);color:#bfe6fb}
+  .note.warn{background:rgba(233,185,73,.08);border:1px solid rgba(233,185,73,.28);color:#f0dca6;margin-bottom:16px}
+  .note .ic{font-size:14px}
+  .sectionlbl{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:2px 4px 10px;font-weight:700}
+  .basecard{position:relative;background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:13px;padding:13px 14px 14px;margin-bottom:11px;cursor:pointer;transition:.18s}
+  .basecard:hover{transform:translateY(-1px);border-color:var(--c);box-shadow:0 6px 20px rgba(0,0,0,.35)}
+  .bhead{display:flex;align-items:center;gap:11px}
+  .bnum{width:30px;height:30px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#08111f;background:var(--c);box-shadow:0 0 0 3px color-mix(in srgb,var(--c) 30%,transparent)}
+  .btitle{font-size:15px;font-weight:700}.bmeta{font-size:11.5px;color:var(--muted);margin-top:1px}.bmeta b{color:var(--c)}
+  .btag{font-size:9.5px;font-weight:700;color:var(--gold);border:1px solid rgba(233,185,73,.4);border-radius:6px;padding:1px 5px;margin-left:6px;vertical-align:middle}
+  .bblurb{font-size:12px;color:var(--muted);line-height:1.5;margin:9px 0 10px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{font-size:11px;background:var(--bg);border:1px solid var(--line);border-radius:20px;padding:4px 9px;color:var(--txt);cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:4px}
+  .chip:hover{border-color:var(--c);background:color-mix(in srgb,var(--c) 14%,var(--bg))}
+  .chip .sg{color:var(--gold);font-size:9px}
+  .stops{display:flex;flex-wrap:wrap;gap:6px;margin:10px 4px 4px}
+  .stopchip{font-size:11px;background:rgba(233,185,73,.08);border:1px dashed rgba(233,185,73,.45);border-radius:20px;padding:4px 9px;color:#f0dca6;cursor:pointer}
+  .toggles{display:flex;flex-direction:column;gap:9px;margin-top:6px;padding:13px 14px;background:var(--panel2);border:1px solid var(--line);border-radius:13px}
+  .toggles .tlbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
+  .toggles label{display:flex;align-items:center;gap:9px;font-size:12.5px;cursor:pointer}
+  .toggles input{accent-color:var(--accent);width:16px;height:16px}
+
+  /* Agenda view */
+  .pills{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 12px;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+  .pill{flex:none;border:1px solid var(--line);background:var(--panel2);border-radius:20px;padding:7px 11px;font-size:11.5px;font-weight:700;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;transition:.15s}
+  .pill:hover{border-color:var(--accent)}
+  .pill.on{background:linear-gradient(135deg,var(--accent),#0ea5e9);color:#06263b;border-color:transparent}
+  .pill .pd{width:7px;height:7px;border-radius:50%}
+  .pill.on .pd{display:none}
+  .g{background:#4ade80}.y{background:#e9b949}.r{background:#fb7185}
+  .ddhd{display:flex;align-items:center;gap:10px;padding:2px 4px 14px;border-bottom:1px solid var(--line);margin-bottom:13px}
+  .ddhd .ddt{font-size:18px;font-weight:800}
+  .ddhd .ddb{font-size:12px;color:var(--muted);margin-top:2px}
+  .ddhd .sp{margin-left:auto}
+  .loadpill{font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:20px;text-transform:uppercase;letter-spacing:.04em}
+  .load-g{background:rgba(74,222,128,.16);color:#86efac}
+  .load-y{background:rgba(233,185,73,.16);color:#f0dca6}
+  .load-r{background:rgba(251,113,133,.16);color:#fda4af}
+  .place{display:flex;gap:11px;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:9px;margin-bottom:9px;cursor:pointer;transition:.15s}
+  .place:hover{border-color:var(--c);transform:translateY(-1px);box-shadow:0 6px 18px rgba(0,0,0,.32)}
+  .pthumb{position:relative;width:88px;height:88px;flex:none;border-radius:11px;overflow:hidden;background:linear-gradient(135deg,#1e2f49,#0f1a2c);display:flex;align-items:center;justify-content:center}
+  .pthumb .pemoji{font-size:28px;opacity:.5}
+  .pthumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .45s}
+  .pthumb img.on{opacity:1}
+  .pbody{flex:1;min-width:0;padding:4px 3px 2px}
+  .ptime{font-size:10.5px;font-weight:800;color:var(--accent);background:rgba(56,189,248,.12);padding:2px 8px;border-radius:20px}
+  .pname{font-size:13.5px;font-weight:700;margin-top:6px;line-height:1.3}
+  .pdesc{font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.4}
+  .logi{display:flex;align-items:center;gap:10px;padding:5px 8px 5px 4px;font-size:12px;color:var(--muted)}
+  .logi .ltime{font-size:10.5px;font-weight:800;color:#7f93ad;min-width:44px}
+  .logi .lic{font-size:12px;width:16px;text-align:center}
+  .resv{margin-top:2px;margin-bottom:10px;font-size:11.5px;color:#f0dca6;background:rgba(233,185,73,.08);border:1px solid rgba(233,185,73,.28);border-radius:10px;padding:8px 11px;display:flex;gap:8px}
+  .ddnav{display:flex;gap:8px;margin-top:12px}
+  .ddnav button{flex:1;border:1px solid var(--line);background:var(--panel2);color:var(--txt);border-radius:10px;padding:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:.15s}
+  .ddnav button:hover:not(:disabled){border-color:var(--accent)}
+  .ddnav button:disabled{opacity:.32;cursor:default}
+
+  /* Map */
+  #mapWrap{flex:1;position:relative;height:100vh;height:100dvh}
+  #map{position:absolute;inset:0}
+  .leaflet-container{background:#081019;font-family:inherit}
+  .pin{width:32px;height:32px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid rgba(255,255,255,.92);box-shadow:0 3px 8px rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center}
+  .pin span{transform:rotate(45deg);font-size:15px;line-height:1}
+  .pin.sug{border-style:dashed;border-color:#ffe08a}.pin.stop{border-style:dashed;border-color:#f4d58a}
+  .basemk{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:#08111f;border:3px solid rgba(255,255,255,.92);box-shadow:0 0 0 4px color-mix(in srgb,var(--c) 32%,transparent),0 3px 9px rgba(0,0,0,.5)}
+  .airmk{padding:4px 9px;border-radius:10px;background:#14243a;border:1.5px solid var(--accent);color:#dcefff;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.55);display:flex;align-items:center;gap:5px}
+  .airmk .role{font-size:9px;text-transform:uppercase;color:#7fd0ff}
+  .timelabel{background:#0e1a2b;border:1px solid #34506b;color:#cfe3f5;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:20px;white-space:nowrap;box-shadow:0 1px 5px rgba(0,0,0,.45)}
+  .timelabel.ferry{border-color:var(--accent);color:#9fd0ff;background:#0c1a2a}
+  .leaflet-popup-content-wrapper{background:var(--panel2);color:var(--txt);border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+  .leaflet-popup-content{margin:12px 14px}.leaflet-popup-tip{background:var(--panel2)}
+  .popimg{width:100%;height:120px;border-radius:9px;overflow:hidden;margin-bottom:8px;background:linear-gradient(135deg,#1e2f49,#0f1a2c);position:relative}
+  .popimg img{width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .45s}
+  .popimg img.on{opacity:1}
+  .pop h4{margin:0 0 5px;font-size:15px}
+  .pop .ztag{display:inline-block;font-size:10px;padding:2px 8px;border-radius:20px;color:#08111f;font-weight:700;margin-bottom:7px}
+  .pop .row{font-size:12.5px;margin:4px 0}.pop .row b{color:var(--accent)}
+  .pop .desc{font-size:12px;color:var(--muted);margin-top:7px;line-height:1.5}
+  .legend{position:absolute;z-index:1000;bottom:16px;right:16px;background:rgba(12,20,34,.9);border:1px solid var(--line);border-radius:12px;padding:11px 13px;font-size:11.5px;backdrop-filter:blur(6px)}
+  .legend .row{display:flex;align-items:center;gap:8px;margin:4px 0;color:var(--muted)}
+  .legend .dot{width:10px;height:10px;border-radius:50%;flex:none}
+  .legend .ln{width:16px;height:0;border-top:3px solid var(--accent);flex:none}.legend .ln.dash{border-top:2px dashed #2dd4bf}
+  @media(max-width:820px){
+    #app{flex-direction:column}#mapWrap{height:100vh;height:100dvh}
+    #panel{position:fixed;left:0;right:0;bottom:0;top:auto;width:100%;min-width:0;max-height:92vh;border-right:0;border-top:1px solid var(--line);border-radius:18px 18px 0 0;box-shadow:0 -10px 34px rgba(0,0,0,.55)}
+    #sheetHandle{display:flex;justify-content:center;align-items:center;padding:9px 0 4px;cursor:pointer;flex-direction:column;gap:6px}
+    #sheetHandle .grab{width:40px;height:5px;border-radius:3px;background:#33465f}
+    #sheetHandle .hint{font-size:11px;color:var(--muted);font-weight:600}
+    #panelBody{display:none;max-height:66vh}#panel.open #panelBody{display:block}
+    #panel.open #sheetHandle .hint::after{content:"Ocultar ▾"}#sheetHandle .hint::after{content:"Ver plan ▴"}
+    .legend{display:none}.brand h1{font-size:17px}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="panel">
+    <div id="sheetHandle"><div class="grab"></div><div class="hint"></div></div>
+    <div id="panelHead">
+      <div class="brand"><span class="flag">🇮🇹</span>
+        <div><h1>Sicilia 2026</h1><div class="sub">Viaje familiar · 2–15 oct · bucle por Palermo</div></div></div>
+      <div class="stats">
+        <span class="stat"><b>13</b> noches</span><span class="stat"><b>5</b> bases</span>
+        <span class="stat"><b>8</b> viajeros</span><span class="stat"><b>~11 h</b> al volante</span></div>
+      <div class="seg" id="seg">
+        <button data-view="agenda" class="on">📅 Agenda</button>
+        <button data-view="map">🗺️ Bases</button></div>
+    </div>
+    <div id="panelBody"></div>
+  </aside>
+  <div id="mapWrap"><div id="map"></div><div class="legend" id="legend"></div></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ============ Datos ============ */
+const BASES = {
+  palermo:{name:'Palermo',color:'#a78bfa',nights:3,lat:38.1157,lng:13.3615,blurb:'Capital vibrante: catedral, Quattro Canti y mercados. Día al noroeste cercano.',trips:['monreale','mondello','segesta','castellammare','scopello','zingaro']},
+  cefalu:{name:'Cefalù',color:'#4ade80',nights:2,lat:38.0394,lng:14.0228,blurb:'Pueblo costero con catedral normanda y playa. Parte el traslado norte y regala descanso.',trips:[]},
+  sanvito:{name:'Trapani / San Vito',color:'#2dd4bf',nights:3,lat:38.1740,lng:12.7370,blurb:'La punta oeste: playas de arena blanca, pueblos marineros y una isla turquesa.',trips:['erice','trapani','favignana']},
+  siracusa:{name:'Siracusa',color:'#fb923c',nights:3,lat:37.0590,lng:15.2934,blurb:'Ortigia barroca + parque arqueológico. Base del sureste, con el Val di Noto.',trips:['noto','modica']},
+  catania:{name:'Catania / Taormina',color:'#fb7185',nights:2,lat:37.5023,lng:15.0873,blurb:'Barroco de piedra de lava, Taormina y los viñedos del Etna.',trips:['taormina','vino']},
+};
+const ORDER=['palermo','cefalu','catania','siracusa','sanvito'];
+
+const POI = {
+  palermo:{emoji:'🏛️',name:'Palermo',lat:38.1157,lng:13.3615,visit:'2 días',wt:'Cattedrale di Palermo',wten:'Palermo',desc:'Catedral, Quattro Canti y mercados (Ballarò, Capo).'},
+  monreale:{emoji:'⛪',name:'Monreale',sug:true,lat:38.0817,lng:13.2920,visit:'2 h',wt:'Duomo di Monreale',wten:'Monreale Cathedral',desc:'Catedral normanda con mosaicos dorados. A 25 min de Palermo.'},
+  mondello:{emoji:'🏖️',name:'Mondello',lat:38.2010,lng:13.3290,visit:'Medio día',wt:'Mondello',wten:'Mondello',desc:'Playa urbana de Palermo, tranquila y somera.'},
+  segesta:{emoji:'🏛️',name:'Segesta',sug:true,lat:37.9415,lng:12.8333,visit:'1,5 h',wt:'Segesta',wten:'Segesta',desc:'Templo griego solitario en la colina.'},
+  castellammare:{emoji:'⚓',name:'Castellammare del Golfo',lat:38.0287,lng:12.8807,visit:'1 h',wt:'Castellammare del Golfo',wten:'Castellammare del Golfo',desc:'Pueblo-puerto encantador.'},
+  scopello:{emoji:'🏖️',name:'Tonnara di Scopello',lat:38.0717,lng:12.8290,visit:'2 h',wt:'Tonnara di Scopello',wten:'Scopello, Sicily',desc:'Cala icónica con faraglioni y antigua almadraba (~5–7 €).'},
+  zingaro:{emoji:'🌿',name:'Reserva del Zingaro',lat:38.0890,lng:12.8270,visit:'2 h',wt:'Riserva naturale orientata dello Zingaro',wten:'Lo Zingaro Natural Reserve',desc:'Calas vírgenes. Cala Capreria a ~20 min a pie (~5 €).'},
+  sanvito:{emoji:'🏖️',name:'San Vito Lo Capo',lat:38.1740,lng:12.7370,visit:'Playa',wt:'San Vito Lo Capo',wten:'San Vito Lo Capo',desc:'Arena blanca y agua somera. Perfecta para la niña de 3 años.'},
+  erice:{emoji:'🏰',name:'Erice',lat:38.0370,lng:12.5870,visit:'2 h',wt:'Erice',wten:'Erice',desc:'Pueblo medieval entre nubes. Teleférico desde Trapani (~10 €).'},
+  trapani:{emoji:'⚓',name:'Trapani',lat:38.0176,lng:12.5365,visit:'2 h',wt:'Trapani',wten:'Trapani',desc:'Casco marinero y puerto de ferry a Favignana.'},
+  favignana:{emoji:'⛵',name:'Favignana (Égadas)',lat:37.9320,lng:12.3290,visit:'1 día',wt:'Favignana',wten:'Favignana',desc:'Isla turquesa, se recorre en bici. Ferry desde Trapani.'},
+  agrigento:{emoji:'🏛️',name:'Valle de los Templos',stop:true,lat:37.2899,lng:13.5876,visit:'3 h',wt:'Valle dei Templi',wten:'Valle dei Templi',desc:'Parada en el traslado oeste↔Siracusa. Templos dorados (UNESCO).'},
+  siracusa:{emoji:'🏛️',name:'Siracusa / Ortigia',lat:37.0590,lng:15.2934,visit:'1 día',wt:'Ortigia',wten:'Ortygia',desc:'Neápolis + isla de Ortigia peatonal.'},
+  noto:{emoji:'🏛️',name:'Noto',sug:true,lat:36.8910,lng:15.0697,visit:'2 h',wt:'Noto',wten:'Noto, Sicily',desc:'Capital del barroco siciliano.'},
+  modica:{emoji:'🍫',name:'Modica',lat:36.8590,lng:14.7615,visit:'2 h',wt:'Modica',wten:'Modica',desc:'Chocolate a la antigua y casco escalonado.'},
+  catania:{emoji:'🏛️',name:'Catania',lat:37.5023,lng:15.0873,visit:'Medio día',wt:'Catania',wten:'Catania',desc:'Barroco en piedra de lava y mercado «A Piscaria».'},
+  taormina:{emoji:'🏛️',name:'Taormina',lat:37.8526,lng:15.2876,visit:'Medio día',wt:'Taormina',wten:'Taormina',desc:'Teatro Griego con vistas al Etna y el mar.'},
+  vino:{emoji:'🍇',name:'Viñedo del Etna',sug:true,lat:37.8836,lng:15.0333,visit:'2 h',wt:'Etna',wten:'Mount Etna',desc:'Bodega Etna DOC en Passopisciaro. Reservar la cata.'},
+  cefalu:{emoji:'🏖️',name:'Cefalù',lat:38.0394,lng:14.0228,visit:'2 días',wt:'Cefalù',wten:'Cefalù',desc:'Catedral normanda, casco medieval y playa.'},
+  pmo:{emoji:'✈️',name:'Aeropuerto de Palermo (PMO)',air:true,lat:38.1759,lng:13.0910},
+};
+
+const SPURS=[['palermo','monreale','25 min'],['palermo','mondello','25 min'],['palermo','segesta','50 min'],['segesta','castellammare','20 min'],['castellammare','scopello','15 min'],['scopello','zingaro','10 min'],['sanvito','erice','45 min'],['erice','trapani','30 min'],['trapani','favignana','⛴ 30 min',true],['siracusa','noto','40 min'],['siracusa','modica','1 h 15'],['catania','taormina','50 min'],['taormina','vino','40 min']];
+const SPINE=[['pmo','palermo','45 min'],['palermo','cefalu','1 h'],['cefalu','catania','2 h'],['catania','siracusa','1 h'],['siracusa','agrigento','2 h 30'],['agrigento','sanvito','2 h 45'],['sanvito','pmo','1 h 45']];
+
+/* ============ Agenda ============ */
+const DAYS=[
+ {d:'Vie 2 oct',bs:'Llegada · Palermo',c:'#94a3b8',load:['g','Llegada'],items:[
+   {t:'15:30',k:'flight',poi:'pmo',a:'Aterrizaje en Palermo (PMO)',n:'Recoger la van + dejar las maletas de París en la consigna/locker'},
+   {t:'16:45',k:'drive',poi:'palermo',a:'A Palermo (45 min) + check-in'},
+   {t:'18:00',k:'visit',poi:'palermo',a:'Primer paseo: Quattro Canti y Fontana Pretoria',n:'Toma de contacto suave'},
+   {t:'20:30',k:'meal',a:'Cena de bienvenida'}]},
+ {d:'Sáb 3 oct',bs:'Palermo',c:'#a78bfa',load:['y','Lleno'],items:[
+   {t:'09:30',k:'drive',a:'A Monreale (25 min)'},
+   {t:'10:00',k:'visit',poi:'monreale',a:'Monreale: catedral y claustro',n:'Mosaicos dorados · ~1,5 h'},
+   {t:'11:45',k:'drive',a:'Volver a Palermo (25 min)'},
+   {t:'12:30',k:'visit',poi:'palermo',a:'Palermo centro: Catedral y Quattro Canti'},
+   {t:'13:30',k:'meal',a:'Almuerzo street-food (mercado Ballarò o Capo)'},
+   {t:'15:00',k:'visit',poi:'palermo',a:'Capilla Palatina y Palacio de los Normandos'},
+   {t:'17:00',k:'visit',poi:'palermo',a:'Teatro Massimo y barrio de la Kalsa'},
+   {t:'20:30',k:'meal',a:'Cena en Palermo'}]},
+ {d:'Dom 4 oct',bs:'Palermo · noroeste',c:'#a78bfa',load:['r','Intenso'],items:[
+   {t:'08:30',k:'drive',a:'Salir de Palermo (50 min)'},
+   {t:'09:20',k:'visit',poi:'segesta',a:'Segesta: templo dórico',n:'~1,5 h'},
+   {t:'11:00',k:'drive',a:'A Castellammare (20 min)'},
+   {t:'11:20',k:'visit',poi:'castellammare',a:'Castellammare del Golfo: paseo del puerto',n:'~1 h'},
+   {t:'12:30',k:'drive',a:'A Scopello (15 min)'},
+   {t:'12:45',k:'beach',poi:'scopello',a:'Tonnara di Scopello: baño + almuerzo',n:'~2 h'},
+   {t:'14:45',k:'beach',poi:'zingaro',a:'Reserva del Zingaro: Cala Capreria',n:'~2 h de baño'},
+   {t:'17:00',k:'drive',a:'Volver a Palermo (1 h)'},
+   {t:'20:30',k:'meal',a:'Cena en Palermo'}]},
+ {d:'Lun 5 oct',bs:'Palermo → Cefalù',c:'#4ade80',load:['g','Suave'],items:[
+   {t:'09:30',k:'beach',poi:'mondello',a:'Mondello: último baño en Palermo',n:'20 min de la ciudad'},
+   {t:'11:30',k:'drive',a:'A Cefalù (1 h 15)'},
+   {t:'12:45',k:'visit',poi:'cefalu',a:'Cefalù: check-in y almuerzo'},
+   {t:'15:00',k:'visit',poi:'cefalu',a:'Casco histórico, catedral normanda, Lavatoio'},
+   {t:'17:00',k:'beach',poi:'cefalu',a:'Playa de Cefalù'},
+   {t:'20:30',k:'meal',a:'Cena junto al mar'}]},
+ {d:'Mar 6 oct',bs:'Cefalù',c:'#4ade80',load:['g','Descanso'],items:[
+   {t:'10:00',k:'beach',poi:'cefalu',a:'Mañana de playa en Cefalù'},
+   {t:'13:00',k:'meal',a:'Almuerzo'},
+   {t:'15:00',k:'visit',poi:'cefalu',a:'Subida a La Rocca (mirador) o compras'},
+   {t:'17:30',k:'rest',a:'Playa, helado y ritmo libre'},
+   {t:'20:30',k:'meal',a:'Cena'}]},
+ {d:'Mié 7 oct',bs:'Cefalù → Catania',c:'#fb7185',load:['g','Suave'],items:[
+   {t:'09:30',k:'drive',a:'Cefalù → Catania (2 h)'},
+   {t:'12:00',k:'visit',poi:'catania',a:'Catania: check-in y Piazza del Duomo'},
+   {t:'13:30',k:'meal',a:'Almuerzo + mercado del pescado «A Piscaria»'},
+   {t:'15:00',k:'visit',poi:'catania',a:'Via Etnea y Catania barroca'},
+   {t:'20:30',k:'meal',a:'Cena en Catania'}]},
+ {d:'Jue 8 oct',bs:'Catania · Taormina + Etna',c:'#fb7185',load:['y','Lleno'],items:[
+   {t:'09:30',k:'drive',a:'A Taormina (50 min)'},
+   {t:'10:30',k:'visit',poi:'taormina',a:'Taormina: Teatro Antico y Corso Umberto',n:'~2,5 h'},
+   {t:'13:00',k:'meal',a:'Almuerzo en Taormina'},
+   {t:'16:00',k:'wine',poi:'vino',a:'Viñedo del Etna: visita y cata',n:'RESERVAR · ~40 min de Taormina'},
+   {t:'18:15',k:'drive',a:'Volver a Catania (1 h)'},
+   {t:'20:30',k:'meal',a:'Cena en Catania'}]},
+ {d:'Vie 9 oct',bs:'Catania → Siracusa',c:'#fb923c',load:['g','Suave'],items:[
+   {t:'10:00',k:'drive',a:'Catania → Siracusa (1 h)'},
+   {t:'11:15',k:'visit',poi:'siracusa',a:'Ortigia: check-in, Duomo y Fonte Aretusa'},
+   {t:'13:30',k:'meal',a:'Almuerzo en el mercado de Ortigia'},
+   {t:'15:30',k:'visit',poi:'siracusa',a:'Castello Maniace y frente al mar'},
+   {t:'17:30',k:'rest',a:'Aperitivo o baño en Ortigia'},
+   {t:'20:30',k:'meal',a:'Cena'}]},
+ {d:'Sáb 10 oct',bs:'Siracusa · Neápolis',c:'#fb923c',load:['g','Suave'],items:[
+   {t:'09:30',k:'visit',poi:'siracusa',a:'Parco Neápolis: Teatro Greco y Orecchio di Dionisio',n:'~2,5 h'},
+   {t:'12:30',k:'meal',a:'Almuerzo'},
+   {t:'14:30',k:'visit',poi:'siracusa',a:'Museo Paolo Orsi (opcional) o más Ortigia'},
+   {t:'16:30',k:'beach',a:'Playa Fontane Bianche / Arenella (20 min)'},
+   {t:'20:30',k:'meal',a:'Cena'}]},
+ {d:'Dom 11 oct',bs:'Siracusa · Noto + Modica',c:'#fb923c',load:['y','Lleno'],items:[
+   {t:'09:30',k:'drive',a:'A Noto (40 min)'},
+   {t:'10:15',k:'visit',poi:'noto',a:'Noto: Corso y Cattedrale barrocos',n:'~2 h'},
+   {t:'12:30',k:'drive',a:'A Modica (1 h 15)'},
+   {t:'13:45',k:'meal',a:'Almuerzo en Modica'},
+   {t:'15:00',k:'visit',poi:'modica',a:'Casco escalonado y chocolate (Bonajuto)',n:'~2 h'},
+   {t:'17:00',k:'drive',a:'Volver a Siracusa (1 h 15)'},
+   {t:'20:30',k:'meal',a:'Cena'}]},
+ {d:'Lun 12 oct',bs:'Siracusa → Agrigento → San Vito',c:'#2dd4bf',load:['r','Día duro'],items:[
+   {t:'07:30',k:'drive',a:'Salida temprana de Siracusa (2 h 30)',n:'Desayuno rápido'},
+   {t:'10:00',k:'visit',poi:'agrigento',a:'Valle de los Templos',n:'El punto fuerte del sur · ~2,5 h'},
+   {t:'12:45',k:'meal',a:'Almuerzo cerca del Valle'},
+   {t:'14:00',k:'drive',a:'A San Vito Lo Capo (2 h 45)'},
+   {t:'16:45',k:'beach',poi:'sanvito',a:'Check-in y playa de San Vito'},
+   {t:'20:30',k:'meal',a:'Cena en San Vito'}]},
+ {d:'Mar 13 oct',bs:'San Vito · Favignana',c:'#2dd4bf',load:['g','Isla'],items:[
+   {t:'08:15',k:'drive',a:'A Trapani, puerto (40 min)'},
+   {t:'09:00',k:'ferry',a:'Ferry Trapani → Favignana (30 min)',n:'RESERVAR (Liberty Lines)'},
+   {t:'09:45',k:'beach',poi:'favignana',a:'Favignana en bici: Cala Rossa y Cala Azzurra'},
+   {t:'13:00',k:'meal',a:'Almuerzo en Favignana'},
+   {t:'16:30',k:'ferry',a:'Ferry de regreso a Trapani'},
+   {t:'17:15',k:'drive',a:'Volver a San Vito (40 min)'},
+   {t:'20:30',k:'meal',a:'Cena'}]},
+ {d:'Mié 14 oct',bs:'San Vito · Erice + Trapani',c:'#2dd4bf',load:['y','Lleno'],items:[
+   {t:'09:30',k:'drive',a:'A Erice (45 min)'},
+   {t:'10:15',k:'visit',poi:'erice',a:'Erice: pueblo medieval, castillo y dulces',n:'~2 h'},
+   {t:'12:30',k:'drive',a:'Bajar a Trapani (30 min)'},
+   {t:'13:00',k:'visit',poi:'trapani',a:'Trapani: casco histórico marinero + almuerzo'},
+   {t:'16:00',k:'beach',poi:'sanvito',a:'San Vito: última tarde de playa',n:'50 min'},
+   {t:'20:30',k:'meal',a:'Cena de despedida'}]},
+ {d:'Jue 15 oct',bs:'San Vito → PMO → París',c:'#94a3b8',load:['y','Salida'],items:[
+   {t:'08:00',k:'drive',poi:'pmo',a:'San Vito → aeropuerto de Palermo (1 h 45)',n:'Salida cómoda para el vuelo de las 12:55'},
+   {t:'09:45',k:'flight',poi:'pmo',a:'Devolver la van + recoger maletas del locker'},
+   {t:'11:00',k:'flight',a:'Facturación y control de seguridad'},
+   {t:'12:55',k:'flight',a:'Vuelo Palermo (PMO) → París-Orly (ORY)'}]},
+];
+const KIC={flight:'✈️',drive:'🚐',visit:'🏛️',beach:'🏖️',meal:'🍽️',rest:'😎',ferry:'⛴️',wine:'🍇'};
+const RESV={7:'🍇 Reservar la cata del viñedo del Etna con antelación.',11:'⛴️ Reservar el ferry a Favignana (Liberty Lines).'};
+
+/* ============ Fotos (Wikimedia Commons, fijas) ============ */
+const U='https://upload.wikimedia.org/wikipedia/commons/thumb/';
+const IMG={
+  palermo:U+'0/0c/Cattedrale_di_Palermo._-_panoramio.jpg/960px-Cattedrale_di_Palermo._-_panoramio.jpg',
+  monreale:U+'e/ef/Monreale_Cathedral_exterior_BW_2012-10-09_10-23-10.jpg/960px-Monreale_Cathedral_exterior_BW_2012-10-09_10-23-10.jpg',
+  mondello:U+'5/52/Il_golfo_di_Mondello.jpg/960px-Il_golfo_di_Mondello.jpg',
+  segesta:U+'0/0b/Segesta_AncientGreekTemple_0932.jpg/960px-Segesta_AncientGreekTemple_0932.jpg',
+  castellammare:U+'9/96/Castellammare_del_Golfo_Harbour%2C_Sicily.jpg/960px-Castellammare_del_Golfo_Harbour%2C_Sicily.jpg',
+  scopello:U+'6/6f/Tonnara_e_Torre_di_Scopello.jpg/960px-Tonnara_e_Torre_di_Scopello.jpg',
+  zingaro:U+'8/89/Zingaro_Sicilia_2005-09-30-1.jpg/960px-Zingaro_Sicilia_2005-09-30-1.jpg',
+  sanvito:U+'3/3c/San_Vito_Lo_Capo_%281%29.jpg/960px-San_Vito_Lo_Capo_%281%29.jpg',
+  erice:U+'5/56/Castle_of_Balio%2C_Torretta_Pepoli%2C_Erice%2C_Trapani_province%2C_Italy%2C_july_2023.jpg/960px-Castle_of_Balio%2C_Torretta_Pepoli%2C_Erice%2C_Trapani_province%2C_Italy%2C_july_2023.jpg',
+  trapani:U+'5/5c/Castello_della_Colombaia%2C_Trapani%2C_Sicilia.jpg/960px-Castello_della_Colombaia%2C_Trapani%2C_Sicilia.jpg',
+  favignana:U+'1/17/Favignana_%281%29.jpg/960px-Favignana_%281%29.jpg',
+  agrigento:U+'3/39/Valle_dei_Templi%2C_Agrigento_%E2%80%93_from_Templo_of_Hera_towards_NE.jpg/960px-Valle_dei_Templi%2C_Agrigento_%E2%80%93_from_Templo_of_Hera_towards_NE.jpg',
+  siracusa:U+'b/b4/Ortigia_dall%27alto.jpg/960px-Ortigia_dall%27alto.jpg',
+  noto:U+'6/6b/Bell_tower_of_Noto_Cathedral.jpg/960px-Bell_tower_of_Noto_Cathedral.jpg',
+  modica:U+'8/8d/A_street_in_Modica_Sicily_Sicilia_Italy_in_1992_a.jpg/960px-A_street_in_Modica_Sicily_Sicilia_Italy_in_1992_a.jpg',
+  catania:U+'6/60/Catania%2C_piazza_del_Duomo.jpg/960px-Catania%2C_piazza_del_Duomo.jpg',
+  taormina:U+'0/01/Panorama_of_Taormina_amphitheatre_23-01-23.jpg/960px-Panorama_of_Taormina_amphitheatre_23-01-23.jpg',
+  vino:U+'4/4c/Etna_Volcano_Paroxysmal_Eruption_July_30_2011_-_Creative_Commons_by_gnuckx.jpg/960px-Etna_Volcano_Paroxysmal_Eruption_July_30_2011_-_Creative_Commons_by_gnuckx.jpg',
+  cefalu:U+'9/98/Cefalu_BW_2012-10-11_12-50-31_o_stitch.jpg/960px-Cefalu_BW_2012-10-11_12-50-31_o_stitch.jpg',
+};
+const imgTag=id=>IMG[id]?`<img src="${IMG[id]}" loading="lazy" onload="this.classList.add('on')" onerror="this.style.display='none'" alt="">`:'';
+
+/* ============ Mapa ============ */
+const poiBase={};Object.entries(BASES).forEach(([bid,b])=>{poiBase[bid]=bid;b.trips.forEach(t=>poiBase[t]=bid);});
+const colorOf=id=>BASES[poiBase[id]]?BASES[poiBase[id]].color:'#94a3b8';
+const map=L.map('map',{zoomControl:true}).setView([37.9,13.9],8);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; OpenStreetMap &copy; CARTO',maxZoom:19}).addTo(map);
+const layerRoute=L.layerGroup().addTo(map),layerSpur=L.layerGroup().addTo(map),layerTime=L.layerGroup().addTo(map),layerPoi=L.layerGroup().addTo(map);
+const show={spur:true,sug:true,time:true};
+let view='agenda', agDay=1;
+const markers={};
+const sched=(()=>{let day=2,o={};ORDER.forEach(id=>{const n=BASES[id].nights;o[id]={from:day,to:day+n-1,n};day+=n;});return o;})();
+function mid(a,b){return[(POI[a].lat+POI[b].lat)/2,(POI[a].lng+POI[b].lng)/2];}
+function icon(id){
+  const p=POI[id];
+  if(p.air) return L.divIcon({className:'',html:`<div class="airmk"><span>🧳✈️</span><span class="role">IN·OUT</span></div>`,iconSize:[0,0],iconAnchor:[30,13]});
+  if(sched[id]){const num=ORDER.indexOf(id)+1;return L.divIcon({className:'',html:`<div class="basemk" style="--c:${BASES[id].color};background:${BASES[id].color}">${num}</div>`,iconSize:[34,34],iconAnchor:[17,17],popupAnchor:[0,-16]});}
+  const bg=p.stop?'#e9b949':colorOf(id),cls=p.stop?'stop':(p.sug?'sug':'');
+  return L.divIcon({className:'',html:`<div class="pin ${cls}" style="background:${bg}"><span>${p.emoji}</span></div>`,iconSize:[32,32],iconAnchor:[16,30],popupAnchor:[0,-28]});
+}
+function popup(id){
+  const p=POI[id];
+  const ph=IMG[id]?`<div class="popimg">${imgTag(id)}</div>`:'';
+  if(p.air) return `<div class="pop">${ph}<h4>${p.emoji} ${p.name}</h4><span class="ztag" style="background:#38bdf8">Base del bucle</span>
+    <div class="row"><b>🧳 Maletas:</b> locker aquí (oct 2), se recogen el oct 15.</div><div class="desc">Recoges/devuelves la van aquí. Después, vuelo a París-Orly.</div></div>`;
+  const b=sched[id],c=p.stop?'#e9b949':colorOf(id);
+  const tag=b?`Base ${ORDER.indexOf(id)+1} · ${b.n} noches (oct ${b.from}–${b.to})`:(p.stop?'Parada en ruta':(BASES[poiBase[id]]?BASES[poiBase[id]].name:''));
+  return `<div class="pop">${ph}<h4>${p.emoji} ${p.name}</h4><span class="ztag" style="background:${c}">${tag}</span>
+    <div class="row"><b>🕒 Visita:</b> ${p.visit}</div><div class="desc">${p.desc}</div></div>`;
+}
+function drawMap(){
+  layerRoute.clearLayers();layerSpur.clearLayers();layerTime.clearLayers();layerPoi.clearLayers();
+  if(show.spur) SPURS.forEach(([a,b,t,f])=>{
+    L.polyline([[POI[a].lat,POI[a].lng],[POI[b].lat,POI[b].lng]],f?{color:'#38bdf8',weight:2.5,opacity:.8,dashArray:'2,8'}:{color:'#2dd4bf',weight:2.5,opacity:.7,dashArray:'6,7'}).addTo(layerSpur);
+    if(show.time) L.marker(mid(a,b),{icon:L.divIcon({className:'',html:`<div class="timelabel ${f?'ferry':''}">${t}</div>`,iconSize:[0,0]})}).addTo(layerTime);
+  });
+  SPINE.forEach(([a,b,t])=>{
+    L.polyline([[POI[a].lat,POI[a].lng],[POI[b].lat,POI[b].lng]],{color:'#38bdf8',weight:4,opacity:.92}).addTo(layerRoute);
+    if(show.time) L.marker(mid(a,b),{icon:L.divIcon({className:'',html:`<div class="timelabel">${t}</div>`,iconSize:[0,0]})}).addTo(layerTime);
+  });
+  Object.keys(POI).forEach(id=>{
+    if(POI[id].sug && !show.sug) return;
+    markers[id]=L.marker([POI[id].lat,POI[id].lng],{icon:icon(id)}).bindPopup(popup(id),{maxWidth:270}).addTo(layerPoi);
+  });
+}
+function flyTo(id){if(!POI[id])return;map.flyTo([POI[id].lat,POI[id].lng],11,{duration:.8});setTimeout(()=>markers[id]&&markers[id].openPopup(),650);}
+
+/* ============ Panel ============ */
+function renderMapView(){
+  let html=`<div class="endpoints">
+     <div class="ep"><div class="lbl">🛬 Llegada</div><div class="val">Palermo</div><div class="day">oct 2 · 15:30</div></div>
+     <div class="ep"><div class="lbl">🛫 Salida</div><div class="val">Palermo</div><div class="day">oct 15 · 12:55 → Orly</div></div></div>
+   <div class="note luggage"><span class="ic">🧳</span><span>Maletas de París en <b>locker en Palermo</b>: por eso es un <b>bucle</b>.</span></div>
+   <div class="sectionlbl">Bases · ${ORDER.length}</div>`;
+  ORDER.forEach((id,i)=>{
+    const b=BASES[id],s=sched[id];
+    const chips=b.trips.map(t=>`<span class="chip" data-poi="${t}">${POI[t].emoji} ${POI[t].name}${POI[t].sug?' <span class="sg">★</span>':''}</span>`).join('');
+    html+=`<div class="basecard" style="--c:${b.color}" data-poi="${id}"><div class="bhead"><div class="bnum">${i+1}</div>
+      <div><div class="btitle">${b.name}${id==='palermo'?'<span class="btag">🧳 LOCKER</span>':''}</div><div class="bmeta"><b>${s.n} noches</b> · oct ${s.from}–${s.to}</div></div></div>
+      <div class="bblurb">${b.blurb}</div><div class="chips">${chips}</div></div>`;
+  });
+  html+=`<div class="sectionlbl" style="margin-top:14px">Parada en ruta</div>
+    <div class="stops"><span class="stopchip" data-poi="agrigento">🏛️ Agrigento · oeste↔Siracusa</span></div>
+    <div class="toggles"><div class="tlbl">Capas del mapa</div>
+     <label><input type="checkbox" id="tgSpur" ${show.spur?'checked':''}> Excursiones de día</label>
+     <label><input type="checkbox" id="tgSug" ${show.sug?'checked':''}> Sugerencias mías (★)</label>
+     <label><input type="checkbox" id="tgTime" ${show.time?'checked':''}> Tiempos de trayecto</label></div>`;
+  return html;
+}
+function renderAgendaView(){
+  const pills=DAYS.map((d,i)=>`<div class="pill ${i===agDay?'on':''}" data-day="${i}"><span class="pd ${d.load[0]}"></span>${d.d.replace(' oct','')}</div>`).join('');
+  const day=DAYS[agDay];
+  const shown=new Set();
+  const rows=day.items.map(it=>{
+    const isPlace=['visit','beach','wine'].includes(it.k)&&it.poi&&POI[it.poi];
+    if(isPlace){
+      const p=POI[it.poi];
+      const img=(!shown.has(it.poi))?imgTag(it.poi):'';
+      shown.add(it.poi);
+      return `<div class="place" style="--c:${day.c}" data-poi="${it.poi}">
+        <div class="pthumb"><span class="pemoji">${p.emoji}</span>${img}</div>
+        <div class="pbody"><span class="ptime">${it.t}</span><div class="pname">${it.a}</div>${it.n?`<div class="pdesc">${it.n}</div>`:''}</div></div>`;
+    }
+    return `<div class="logi"><span class="ltime">${it.t}</span><span class="lic">${KIC[it.k]||'•'}</span><span>${it.a}${it.n?` · ${it.n}`:''}</span></div>`;
+  }).join('');
+  const resv=RESV[agDay]?`<div class="resv"><span>⭐</span><span>${RESV[agDay]}</span></div>`:'';
+  return `<div class="pills">${pills}</div>
+    <div class="ddhd"><div><div class="ddt">${day.d}</div><div class="ddb">${day.bs}</div></div>
+      <span class="sp"></span><span class="loadpill load-${day.load[0]}">${day.load[1]}</span></div>
+    ${resv}${rows}
+    <div class="ddnav"><button id="dprev" ${agDay===0?'disabled':''}>← Día anterior</button><button id="dnext" ${agDay===DAYS.length-1?'disabled':''}>Día siguiente →</button></div>`;
+}
+function renderPanel(){
+  const body=document.getElementById('panelBody');
+  body.innerHTML = view==='agenda'?renderAgendaView():renderMapView();
+  body.querySelectorAll('[data-poi]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();flyTo(el.getAttribute('data-poi'));if(window.innerWidth<=820)closeSheet();}));
+  if(view==='agenda'){
+    body.querySelectorAll('.pill').forEach(el=>el.onclick=()=>{agDay=+el.dataset.day;renderPanel();body.scrollTop=0;});
+    const pv=document.getElementById('dprev'),nx=document.getElementById('dnext');
+    if(pv)pv.onclick=()=>{if(agDay>0){agDay--;renderPanel();body.scrollTop=0;}};
+    if(nx)nx.onclick=()=>{if(agDay<DAYS.length-1){agDay++;renderPanel();body.scrollTop=0;}};
+  }else{
+    document.getElementById('tgSpur').onchange=e=>{show.spur=e.target.checked;drawMap();};
+    document.getElementById('tgSug').onchange=e=>{show.sug=e.target.checked;drawMap();};
+    document.getElementById('tgTime').onchange=e=>{show.time=e.target.checked;drawMap();};
+  }
+}
+document.getElementById('legend').innerHTML=
+  Object.values(BASES).map(b=>`<div class="row"><span class="dot" style="background:${b.color}"></span>${b.name}</div>`).join('')
+  +`<div class="row"><span class="dot" style="background:#e9b949"></span>Agrigento (parada)</div>`
+  +`<div class="row" style="margin-top:6px;border-top:1px solid #223049;padding-top:7px"><span class="ln"></span>Traslado en van</div>`
+  +`<div class="row"><span class="ln dash"></span>Excursión de día</div>`;
+document.getElementById('seg').addEventListener('click',e=>{
+  const btn=e.target.closest('button');if(!btn)return;
+  view=btn.dataset.view;
+  document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b===btn));
+  renderPanel();
+});
+const panel=document.getElementById('panel');
+function closeSheet(){panel.classList.remove('open');setTimeout(()=>map.invalidateSize(),320);}
+document.getElementById('sheetHandle').addEventListener('click',()=>{panel.classList.toggle('open');setTimeout(()=>map.invalidateSize(),320);});
+window.addEventListener('resize',()=>map.invalidateSize());
+drawMap();renderPanel();
+map.fitBounds(L.latLngBounds(Object.values(POI).map(p=>[p.lat,p.lng])).pad(0.12));
+setTimeout(()=>map.invalidateSize(),200);
+</script>
+</body>
+</html>
