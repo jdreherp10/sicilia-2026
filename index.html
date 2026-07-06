@@ -340,17 +340,20 @@ const PEOPLE=[
 const GKEY='sicilia_gastos_v1';
 let expenses=[];try{expenses=JSON.parse(localStorage.getItem(GKEY)||'[]');}catch(e){expenses=[];}
 let fPaidBy='A';
+let fCat='normal';
 let fFor=new Set(PEOPLE.map(p=>p.id));
 function saveG(){try{localStorage.setItem(GKEY,JSON.stringify(expenses));}catch(e){}}
 const unitById=id=>UNITS.find(u=>u.id===id);
 function money(n){const v=Math.round(n*100)/100;return '€'+v.toFixed(2);}
+/* Peso de consumo por persona según tipo de gasto. Solo Elina varía: ¼ en hospedaje, completo en el resto. */
+function cw(pid,cat){return (pid==='elina'&&cat==='hospedaje')?0.25:1;}
 function computeG(){
   const paid={A:0,B:0,K:0},owed={A:0,B:0,K:0};
   expenses.forEach(e=>{
     paid[e.paidBy]=(paid[e.paidBy]||0)+e.amount;
     const who=(e.forWhom&&e.forWhom.length)?e.forWhom:PEOPLE.map(p=>p.id);
-    const share=e.amount/who.length;
-    who.forEach(pid=>{const p=PEOPLE.find(x=>x.id===pid);if(p)for(const u in p.w)owed[u]+=share*p.w[u];});
+    const tw=who.reduce((s,pid)=>s+cw(pid,e.cat),0);
+    who.forEach(pid=>{const p=PEOPLE.find(x=>x.id===pid);if(!p)return;const share=e.amount*cw(pid,e.cat)/tw;for(const u in p.w)owed[u]+=share*p.w[u];});
   });
   const bal={};UNITS.forEach(u=>bal[u.id]=paid[u.id]-owed[u.id]);
   return {paid,owed,bal};
@@ -375,12 +378,13 @@ function renderGastos(){
     (s.length?s.map(x=>`<div class="settle">${unitById(x.from).short} <span style="color:var(--muted);font-weight:600;margin:0 2px">paga a</span> ${unitById(x.to).short}<span>${money(x.amt)}</span></div>`).join(''):'<div class="settle ok">Todo saldado ✓</div>');
   const total=expenses.reduce((a,e)=>a+e.amount,0);
   const payChips=UNITS.map(u=>`<div class="gchip paychip ${fPaidBy===u.id?'on':''}" style="--c:${u.color}" data-pay="${u.id}">${u.short}</div>`).join('');
+  const catChips=`<div class="gchip catchip ${fCat==='normal'?'on':''}" data-cat="normal">🎫 Normal</div><div class="gchip catchip ${fCat==='hospedaje'?'on':''}" data-cat="hospedaje">🛏️ Hospedaje · Elina ¼</div>`;
   const forChips=PEOPLE.map(p=>`<div class="gchip forchip ${fFor.has(p.id)?'on':''}" data-for="${p.id}">${p.name}</div>`).join('');
   const today=new Date().toISOString().slice(0,10);
   const list=expenses.slice().reverse().map(e=>{
     const who=(e.forWhom&&e.forWhom.length)?`${e.forWhom.length} pers.`:'todos';
     return `<div class="erow"><div class="einfo"><div class="edesc">${e.desc||'(sin nombre)'}</div>
-      <div class="emeta">${e.date} · pagó ${unitById(e.paidBy).short} · ${who}</div></div>
+      <div class="emeta">${e.date} · pagó ${unitById(e.paidBy).short} · ${who}${e.cat==='hospedaje'?' · 🛏️':''}</div></div>
       <div class="eamt">${money(e.amount)}</div><button class="edel" data-del="${e.id}" aria-label="Eliminar">×</button></div>`;
   }).join('');
   return `<div class="gsummary">${cards}</div>
@@ -388,6 +392,7 @@ function renderGastos(){
     <div class="gform">
       <div><label>Descripción</label><input type="text" id="gDesc" placeholder="Cena, gasolina, entradas…"></div>
       <div><label>Monto (€)</label><input type="text" id="gAmt" inputmode="decimal" placeholder="0,00"></div>
+      <div><label>Tipo de gasto</label><div class="chrow">${catChips}</div></div>
       <div><label>¿Quién pagó?</label><div class="chrow">${payChips}</div></div>
       <div><label>¿Para quién? <span id="gForLbl" style="color:var(--accent)">${fFor.size===PEOPLE.length?'(todos)':'('+fFor.size+')'}</span></label>
         <div class="chrow">${forChips}</div>
@@ -404,6 +409,7 @@ function renderGastos(){
 function bindGastos(){
   const body=document.getElementById('panelBody');
   body.querySelectorAll('[data-pay]').forEach(el=>el.onclick=()=>{fPaidBy=el.dataset.pay;body.querySelectorAll('[data-pay]').forEach(x=>x.classList.toggle('on',x.dataset.pay===fPaidBy));});
+  body.querySelectorAll('[data-cat]').forEach(el=>el.onclick=()=>{fCat=el.dataset.cat;body.querySelectorAll('[data-cat]').forEach(x=>x.classList.toggle('on',x.dataset.cat===fCat));});
   const updLbl=()=>{const l=document.getElementById('gForLbl');if(l)l.textContent=fFor.size===PEOPLE.length?'(todos)':'('+fFor.size+')';};
   body.querySelectorAll('[data-for]').forEach(el=>el.onclick=()=>{const id=el.dataset.for;if(fFor.has(id))fFor.delete(id);else fFor.add(id);el.classList.toggle('on');updLbl();});
   const all=document.getElementById('gAll'),none=document.getElementById('gNone');
@@ -419,7 +425,7 @@ function bindGastos(){
     if(!amt||amt<=0){alert('Pon un monto válido.');return;}
     if(fFor.size===0){alert('Elige al menos una persona en «¿Para quién?».');return;}
     const forWhom=fFor.size===PEOPLE.length?[]:[...fFor];
-    expenses.push({id:'e'+Date.now()+Math.floor(Math.random()*1000),date,desc,amount:amt,paidBy:fPaidBy,forWhom});
+    expenses.push({id:'e'+Date.now()+Math.floor(Math.random()*1000),date,desc,amount:amt,paidBy:fPaidBy,cat:fCat,forWhom});
     saveG();renderPanel();
   };
   body.querySelectorAll('[data-del]').forEach(el=>el.onclick=()=>{if(confirm('¿Eliminar este gasto?')){expenses=expenses.filter(e=>e.id!==el.dataset.del);saveG();renderPanel();}});
@@ -478,7 +484,7 @@ function popup(id){
   if(p.air) return `<div class="pop">${ph}<h4>${p.emoji} ${p.name}</h4><span class="ztag" style="background:#38bdf8">Base del bucle</span>
     <div class="row"><b>🧳 Maletas:</b> locker aquí (oct 2), se recogen el oct 15.</div><div class="desc">Recoges/devuelves la van aquí. Después, vuelo a París-Orly.</div></div>`;
   const b=sched[id],c=p.stop?'#e9b949':colorOf(id);
-  const tag=b?`Base ${ORDER.indexOf(id)+1} · ${b.n} noches (oct ${b.from}–${b.to})`:(p.stop?'Parada en ruta':(BASES[poiBase[id]]?BASES[poiBase[id]].name:''));
+  const tag=b?`Base ${ORDER.indexOf(id)+1} · entra ${b.from} → sale ${b.to+1} oct · ${b.n} noches`:(p.stop?'Parada en ruta':(BASES[poiBase[id]]?BASES[poiBase[id]].name:''));
   return `<div class="pop">${ph}<h4>${p.emoji} ${p.name}</h4><span class="ztag" style="background:${c}">${tag}</span>
     <div class="row"><b>🕒 Visita:</b> ${p.visit}</div><div class="desc">${p.desc}</div></div>`;
 }
@@ -510,7 +516,7 @@ function renderMapView(){
     const b=BASES[id],s=sched[id];
     const chips=b.trips.map(t=>`<span class="chip" data-poi="${t}">${POI[t].emoji} ${POI[t].name}${POI[t].sug?' <span class="sg">★</span>':''}</span>`).join('');
     html+=`<div class="basecard" style="--c:${b.color}" data-poi="${id}"><div class="bhead"><div class="bnum">${i+1}</div>
-      <div><div class="btitle">${b.name}${id==='palermo'?'<span class="btag">🧳 LOCKER</span>':''}</div><div class="bmeta"><b>${s.n} noches</b> · oct ${s.from}–${s.to}</div></div></div>
+      <div><div class="btitle">${b.name}${id==='palermo'?'<span class="btag">🧳 LOCKER</span>':''}</div><div class="bmeta">🛎️ <b>entra ${s.from} oct · sale ${s.to+1} oct</b> · ${s.n} noche${s.n>1?'s':''}</div></div></div>
       <div class="bblurb">${b.blurb}</div><div class="chips">${chips}</div></div>`;
   });
   html+=`<div class="sectionlbl" style="margin-top:14px">Parada en ruta</div>
