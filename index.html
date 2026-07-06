@@ -124,6 +124,39 @@
     #panel.open #sheetHandle .hint::after{content:"Ocultar ▾"}#sheetHandle .hint::after{content:"Ver plan ▴"}
     .legend{display:none}.brand h1{font-size:17px}
   }
+  /* Gastos */
+  .gsummary{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+  .ucard{background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:12px;padding:10px 13px}
+  .ucard .uname{font-size:13px;font-weight:700}
+  .ucard .ubal{font-size:19px;font-weight:800;margin-top:2px}
+  .ucard .ubal.pos{color:#4ade80}.ucard .ubal.neg{color:#fb7185}.ucard .ubal.zero{color:var(--muted)}
+  .ucard .ulbl{font-size:11px;color:var(--muted)}
+  .ucard .upaid{font-size:10.5px;color:var(--muted);margin-top:4px}
+  .settlebox{background:rgba(56,189,248,.07);border:1px solid rgba(56,189,248,.25);border-radius:12px;padding:11px 13px;margin-bottom:16px}
+  .settlebox .st{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700;margin-bottom:6px}
+  .settle{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;padding:4px 0}
+  .settle span{margin-left:auto;font-weight:800;color:#7fd0ff}
+  .settle.ok{color:#86efac}
+  .gform{background:var(--panel2);border:1px solid var(--line);border-radius:13px;padding:13px;margin-bottom:14px;display:flex;flex-direction:column;gap:11px}
+  .gform label{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:5px}
+  .gform input{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:10px 11px;color:var(--txt);font-size:14px;font-family:inherit}
+  .gform input:focus{outline:none;border-color:var(--accent)}
+  .chrow{display:flex;gap:6px;flex-wrap:wrap}
+  .gchip{border:1px solid var(--line);background:var(--bg);border-radius:20px;padding:6px 11px;font-size:12px;color:var(--muted);cursor:pointer;font-weight:600;user-select:none}
+  .gchip.on{background:color-mix(in srgb,var(--accent) 20%,var(--bg));border-color:var(--accent);color:var(--txt)}
+  .paychip.on{background:var(--c);border-color:transparent;color:#08111f}
+  .gadd{background:linear-gradient(135deg,var(--accent),#0ea5e9);color:#06263b;border:0;border-radius:10px;padding:12px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit}
+  .elist{display:flex;flex-direction:column;gap:7px}
+  .erow{display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:9px 11px}
+  .erow .einfo{flex:1;min-width:0}
+  .erow .edesc{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .erow .emeta{font-size:10.5px;color:var(--muted);margin-top:2px}
+  .erow .eamt{font-size:14px;font-weight:800;white-space:nowrap}
+  .erow .edel{border:0;background:transparent;color:#fb7185;font-size:19px;cursor:pointer;line-height:1;padding:0 2px}
+  .gnote{font-size:11px;color:var(--muted);line-height:1.5;margin-top:14px;background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:11px}
+  .gnote textarea{width:100%;height:64px;margin-top:8px;background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--muted);font-size:10px;font-family:monospace;padding:8px;resize:vertical}
+  .gbtns{display:flex;gap:8px;margin-top:8px}
+  .gbtns button{flex:1;border:1px solid var(--line);background:var(--bg);color:var(--txt);border-radius:8px;padding:9px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit}
 </style>
 </head>
 <body>
@@ -138,7 +171,8 @@
         <span class="stat"><b>8</b> viajeros</span><span class="stat"><b>~11 h</b> al volante</span></div>
       <div class="seg" id="seg">
         <button data-view="agenda" class="on">📅 Agenda</button>
-        <button data-view="map">🗺️ Bases</button></div>
+        <button data-view="map">🗺️ Bases</button>
+        <button data-view="gastos">💶 Gastos</button></div>
     </div>
     <div id="panelBody"></div>
   </aside>
@@ -287,6 +321,114 @@ const DAYS=[
 const KIC={flight:'✈️',drive:'🚐',visit:'🏛️',beach:'🏖️',meal:'🍽️',rest:'😎',ferry:'⛴️',wine:'🍇'};
 const RESV={7:'🍇 Reservar la cata del viñedo del Etna con antelación.',11:'⛴️ Reservar el ferry a Favignana (Liberty Lines).'};
 
+/* ============ Gastos compartidos ============ */
+const UNITS=[
+  {id:'A',name:'Johan & Christel',short:'J&C',color:'#a78bfa'},
+  {id:'B',name:'Peter & Sofía',short:'P&S',color:'#fb7185'},
+  {id:'K',name:'Klaus',short:'Klaus',color:'#2dd4bf'},
+];
+const PEOPLE=[
+  {id:'johan',name:'Johan',w:{A:1}},
+  {id:'christel',name:'Christel',w:{A:1}},
+  {id:'elina',name:'Elina',w:{A:1}},
+  {id:'peter',name:'Peter',w:{B:1}},
+  {id:'sofia',name:'Sofía',w:{B:1}},
+  {id:'klaus',name:'Klaus',w:{K:1}},
+  {id:'pili',name:'Pili · mamá',w:{A:0.5,B:0.5}},
+  {id:'pilo',name:'Pilo · suegra',w:{A:0.5,K:0.5}},
+];
+const GKEY='sicilia_gastos_v1';
+let expenses=[];try{expenses=JSON.parse(localStorage.getItem(GKEY)||'[]');}catch(e){expenses=[];}
+let fPaidBy='A';
+let fFor=new Set(PEOPLE.map(p=>p.id));
+function saveG(){try{localStorage.setItem(GKEY,JSON.stringify(expenses));}catch(e){}}
+const unitById=id=>UNITS.find(u=>u.id===id);
+function money(n){const v=Math.round(n*100)/100;return '€'+v.toFixed(2);}
+function computeG(){
+  const paid={A:0,B:0,K:0},owed={A:0,B:0,K:0};
+  expenses.forEach(e=>{
+    paid[e.paidBy]=(paid[e.paidBy]||0)+e.amount;
+    const who=(e.forWhom&&e.forWhom.length)?e.forWhom:PEOPLE.map(p=>p.id);
+    const share=e.amount/who.length;
+    who.forEach(pid=>{const p=PEOPLE.find(x=>x.id===pid);if(p)for(const u in p.w)owed[u]+=share*p.w[u];});
+  });
+  const bal={};UNITS.forEach(u=>bal[u.id]=paid[u.id]-owed[u.id]);
+  return {paid,owed,bal};
+}
+function settleG(bal){
+  const debt=[],cred=[];
+  UNITS.forEach(u=>{const v=bal[u.id];if(v<-0.005)debt.push({id:u.id,amt:-v});else if(v>0.005)cred.push({id:u.id,amt:v});});
+  const r=[];let i=0,j=0;
+  while(i<debt.length&&j<cred.length){const m=Math.min(debt[i].amt,cred[j].amt);r.push({from:debt[i].id,to:cred[j].id,amt:m});debt[i].amt-=m;cred[j].amt-=m;if(debt[i].amt<0.005)i++;if(cred[j].amt<0.005)j++;}
+  return r;
+}
+function renderGastos(){
+  const {paid,owed,bal}=computeG();
+  const cards=UNITS.map(u=>{
+    const v=bal[u.id],cls=v>0.005?'pos':(v<-0.005?'neg':'zero'),lbl=v>0.005?'le deben':(v<-0.005?'debe':'al día');
+    return `<div class="ucard" style="--c:${u.color}"><div class="uname">${u.name}</div>
+      <div class="ubal ${cls}">${cls==='neg'?'-':''}${money(Math.abs(v))}</div><div class="ulbl">${lbl}</div>
+      <div class="upaid">pagó ${money(paid[u.id])} · le toca ${money(owed[u.id])}</div></div>`;
+  }).join('');
+  const s=settleG(bal);
+  const settleHtml=!expenses.length?'<div class="settle" style="color:var(--muted);font-weight:600">Aún sin gastos</div>':
+    (s.length?s.map(x=>`<div class="settle">${unitById(x.from).short} <span style="color:var(--muted);font-weight:600;margin:0 2px">paga a</span> ${unitById(x.to).short}<span>${money(x.amt)}</span></div>`).join(''):'<div class="settle ok">Todo saldado ✓</div>');
+  const total=expenses.reduce((a,e)=>a+e.amount,0);
+  const payChips=UNITS.map(u=>`<div class="gchip paychip ${fPaidBy===u.id?'on':''}" style="--c:${u.color}" data-pay="${u.id}">${u.short}</div>`).join('');
+  const forChips=PEOPLE.map(p=>`<div class="gchip forchip ${fFor.has(p.id)?'on':''}" data-for="${p.id}">${p.name}</div>`).join('');
+  const today=new Date().toISOString().slice(0,10);
+  const list=expenses.slice().reverse().map(e=>{
+    const who=(e.forWhom&&e.forWhom.length)?`${e.forWhom.length} pers.`:'todos';
+    return `<div class="erow"><div class="einfo"><div class="edesc">${e.desc||'(sin nombre)'}</div>
+      <div class="emeta">${e.date} · pagó ${unitById(e.paidBy).short} · ${who}</div></div>
+      <div class="eamt">${money(e.amount)}</div><button class="edel" data-del="${e.id}" aria-label="Eliminar">×</button></div>`;
+  }).join('');
+  return `<div class="gsummary">${cards}</div>
+    <div class="settlebox"><div class="st">Cómo saldar cuentas</div>${settleHtml}</div>
+    <div class="gform">
+      <div><label>Descripción</label><input type="text" id="gDesc" placeholder="Cena, gasolina, entradas…"></div>
+      <div><label>Monto (€)</label><input type="text" id="gAmt" inputmode="decimal" placeholder="0,00"></div>
+      <div><label>¿Quién pagó?</label><div class="chrow">${payChips}</div></div>
+      <div><label>¿Para quién? <span id="gForLbl" style="color:var(--accent)">${fFor.size===PEOPLE.length?'(todos)':'('+fFor.size+')'}</span></label>
+        <div class="chrow">${forChips}</div>
+        <div class="chrow" style="margin-top:6px"><div class="gchip" id="gAll">Todos</div><div class="gchip" id="gNone">Ninguno</div></div></div>
+      <div><label>Fecha</label><input type="date" id="gDate" value="${today}"></div>
+      <button class="gadd" id="gAddBtn">+ Añadir gasto</button>
+    </div>
+    <div class="sectionlbl">Gastos (${expenses.length}) · total ${money(total)}</div>
+    <div class="elist">${list||'<div style="color:var(--muted);font-size:12px;padding:4px">Todavía no hay gastos. Añade el primero arriba.</div>'}</div>
+    <div class="gnote"><b>ℹ️ Datos guardados en este dispositivo.</b> Para compartir con los demás: copia el respaldo y envíalo (WhatsApp); ellos lo pegan y cargan. (Sincronización en vivo = próximo paso.)
+      <textarea id="gJson" readonly>${JSON.stringify(expenses)}</textarea>
+      <div class="gbtns"><button id="gCopy">📋 Copiar respaldo</button><button id="gLoad">📥 Cargar pegado</button></div></div>`;
+}
+function bindGastos(){
+  const body=document.getElementById('panelBody');
+  body.querySelectorAll('[data-pay]').forEach(el=>el.onclick=()=>{fPaidBy=el.dataset.pay;body.querySelectorAll('[data-pay]').forEach(x=>x.classList.toggle('on',x.dataset.pay===fPaidBy));});
+  const updLbl=()=>{const l=document.getElementById('gForLbl');if(l)l.textContent=fFor.size===PEOPLE.length?'(todos)':'('+fFor.size+')';};
+  body.querySelectorAll('[data-for]').forEach(el=>el.onclick=()=>{const id=el.dataset.for;if(fFor.has(id))fFor.delete(id);else fFor.add(id);el.classList.toggle('on');updLbl();});
+  const all=document.getElementById('gAll'),none=document.getElementById('gNone');
+  if(all)all.onclick=()=>{fFor=new Set(PEOPLE.map(p=>p.id));body.querySelectorAll('[data-for]').forEach(x=>x.classList.add('on'));updLbl();};
+  if(none)none.onclick=()=>{fFor=new Set();body.querySelectorAll('[data-for]').forEach(x=>x.classList.remove('on'));updLbl();};
+  const add=document.getElementById('gAddBtn');
+  if(add)add.onclick=()=>{
+    const desc=document.getElementById('gDesc').value.trim();
+    let raw=document.getElementById('gAmt').value.trim();
+    if(raw.indexOf(',')>=0) raw=raw.replace(/\./g,'').replace(',','.');
+    const amt=parseFloat(raw);
+    const date=document.getElementById('gDate').value||new Date().toISOString().slice(0,10);
+    if(!amt||amt<=0){alert('Pon un monto válido.');return;}
+    if(fFor.size===0){alert('Elige al menos una persona en «¿Para quién?».');return;}
+    const forWhom=fFor.size===PEOPLE.length?[]:[...fFor];
+    expenses.push({id:'e'+Date.now()+Math.floor(Math.random()*1000),date,desc,amount:amt,paidBy:fPaidBy,forWhom});
+    saveG();renderPanel();
+  };
+  body.querySelectorAll('[data-del]').forEach(el=>el.onclick=()=>{if(confirm('¿Eliminar este gasto?')){expenses=expenses.filter(e=>e.id!==el.dataset.del);saveG();renderPanel();}});
+  const copy=document.getElementById('gCopy');
+  if(copy)copy.onclick=()=>{const ta=document.getElementById('gJson');ta.select();const done=()=>{copy.textContent='✓ Copiado';setTimeout(()=>copy.textContent='📋 Copiar respaldo',1500);};if(navigator.clipboard){navigator.clipboard.writeText(ta.value).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}};
+  const load=document.getElementById('gLoad');
+  if(load)load.onclick=()=>{const t=prompt('Pega aquí el respaldo (JSON) que te enviaron:');if(!t)return;try{const arr=JSON.parse(t);if(Array.isArray(arr)){expenses=arr;saveG();renderPanel();}else alert('Formato no válido.');}catch(e){alert('No se pudo leer el JSON.');}};
+}
+
 /* ============ Fotos (Wikimedia Commons, fijas) ============ */
 const U='https://upload.wikimedia.org/wikipedia/commons/thumb/';
 const IMG={
@@ -404,6 +546,7 @@ function renderAgendaView(){
 }
 function renderPanel(){
   const body=document.getElementById('panelBody');
+  if(view==='gastos'){body.innerHTML=renderGastos();bindGastos();return;}
   body.innerHTML = view==='agenda'?renderAgendaView():renderMapView();
   body.querySelectorAll('[data-poi]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();flyTo(el.getAttribute('data-poi'));if(window.innerWidth<=820)closeSheet();}));
   if(view==='agenda'){
