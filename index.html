@@ -157,6 +157,28 @@
   .gnote textarea{width:100%;height:64px;margin-top:8px;background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--muted);font-size:10px;font-family:monospace;padding:8px;resize:vertical}
   .gbtns{display:flex;gap:8px;margin-top:8px}
   .gbtns button{flex:1;border:1px solid var(--line);background:var(--bg);color:var(--txt);border-radius:8px;padding:9px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit}
+  /* Casas / Alojamiento */
+  .staysum{font-size:11.5px;color:var(--muted);margin:0 4px 11px;font-weight:600}
+  .stcard{position:relative;background:var(--panel2);border:1px solid var(--line);border-radius:13px;padding:12px 13px;margin-bottom:10px}
+  .stcard.best{border-color:var(--gold);box-shadow:0 0 0 1px rgba(233,185,73,.22)}
+  .stcard .stdel{position:absolute;top:9px;right:10px;border:0;background:transparent;color:#fb7185;font-size:20px;cursor:pointer;line-height:1;padding:0 2px}
+  .sttop{display:flex;align-items:flex-start;gap:8px;padding-right:22px}
+  .stname{font-size:14px;font-weight:700;flex:1;min-width:0;line-height:1.3}
+  .strate{font-size:11px;font-weight:700;color:#f0dca6;background:rgba(233,185,73,.14);border-radius:20px;padding:2px 8px;white-space:nowrap}
+  .stbadge{font-size:9px;font-weight:800;color:#08111f;background:var(--gold);border-radius:6px;padding:2px 6px;margin-left:6px;white-space:nowrap}
+  .stmetrics{display:flex;gap:7px;margin:11px 0 10px}
+  .stmetric{flex:1;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 6px;text-align:center}
+  .stmetric .mv{font-size:14.5px;font-weight:800;line-height:1}
+  .stmetric .ml{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-top:4px}
+  .stmetric.hero{border-color:rgba(56,189,248,.4);background:rgba(56,189,248,.07)}
+  .stmetric.hero .mv{color:var(--accent)}
+  .stspecs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px}
+  .stspec{font-size:11px;background:var(--bg);border:1px solid var(--line);border-radius:20px;padding:3px 9px;color:var(--txt);display:inline-flex;gap:4px;align-items:center}
+  .stspec.bad{border-color:rgba(251,113,133,.5);color:#fda4af}
+  .stspec.good{border-color:rgba(74,222,128,.4);color:#86efac}
+  .stnotes{font-size:11.5px;color:var(--muted);line-height:1.45;margin:0 0 9px}
+  .stlink{display:inline-block;font-size:12px;font-weight:700;color:var(--accent);text-decoration:none;border:1px solid rgba(56,189,248,.35);border-radius:9px;padding:7px 12px}
+  .stlink:hover{background:rgba(56,189,248,.1)}
 </style>
 </head>
 <body>
@@ -172,6 +194,7 @@
       <div class="seg" id="seg">
         <button data-view="agenda" class="on">📅 Agenda</button>
         <button data-view="map">🗺️ Bases</button>
+        <button data-view="stay">🏠 Casas</button>
         <button data-view="gastos">💶 Gastos</button></div>
     </div>
     <div id="panelBody"></div>
@@ -180,6 +203,7 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /* ============ Datos ============ */
 const BASES = {
@@ -402,7 +426,7 @@ function renderGastos(){
     </div>
     <div class="sectionlbl">Gastos (${expenses.length}) · total ${money(total)}</div>
     <div class="elist">${list||'<div style="color:var(--muted);font-size:12px;padding:4px">Todavía no hay gastos. Añade el primero arriba.</div>'}</div>
-    <div class="gnote"><b>ℹ️ Datos guardados en este dispositivo.</b> Para compartir con los demás: copia el respaldo y envíalo (WhatsApp); ellos lo pegan y cargan. (Sincronización en vivo = próximo paso.)
+    <div class="gnote"><b>🔄 Sincronizado en vivo con la familia.</b> Todos ven los mismos gastos al instante. El respaldo de abajo es solo por si acaso (uso offline).
       <textarea id="gJson" readonly>${JSON.stringify(expenses)}</textarea>
       <div class="gbtns"><button id="gCopy">📋 Copiar respaldo</button><button id="gLoad">📥 Cargar pegado</button></div></div>`;
 }
@@ -425,15 +449,150 @@ function bindGastos(){
     if(!amt||amt<=0){alert('Pon un monto válido.');return;}
     if(fFor.size===0){alert('Elige al menos una persona en «¿Para quién?».');return;}
     const forWhom=fFor.size===PEOPLE.length?[]:[...fFor];
-    expenses.push({id:'e'+Date.now()+Math.floor(Math.random()*1000),date,desc,amount:amt,paidBy:fPaidBy,cat:fCat,forWhom});
-    saveG();renderPanel();
+    const ge={id:'e'+Date.now()+Math.floor(Math.random()*1000),date,desc,amount:amt,paidBy:fPaidBy,cat:fCat,forWhom};
+    expenses.push(ge);saveG();renderPanel();sbIns('gastos',gToRow(ge));
   };
-  body.querySelectorAll('[data-del]').forEach(el=>el.onclick=()=>{if(confirm('¿Eliminar este gasto?')){expenses=expenses.filter(e=>e.id!==el.dataset.del);saveG();renderPanel();}});
+  body.querySelectorAll('[data-del]').forEach(el=>el.onclick=()=>{if(confirm('¿Eliminar este gasto?')){const did=el.dataset.del;expenses=expenses.filter(e=>e.id!==did);saveG();renderPanel();sbDel('gastos',did);}});
   const copy=document.getElementById('gCopy');
   if(copy)copy.onclick=()=>{const ta=document.getElementById('gJson');ta.select();const done=()=>{copy.textContent='✓ Copiado';setTimeout(()=>copy.textContent='📋 Copiar respaldo',1500);};if(navigator.clipboard){navigator.clipboard.writeText(ta.value).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}};
   const load=document.getElementById('gLoad');
   if(load)load.onclick=()=>{const t=prompt('Pega aquí el respaldo (JSON) que te enviaron:');if(!t)return;try{const arr=JSON.parse(t);if(Array.isArray(arr)){expenses=arr;saveG();renderPanel();}else alert('Formato no válido.');}catch(e){alert('No se pudo leer el JSON.');}};
 }
+
+/* ============ Alojamiento (Casas) ============ */
+const SKEY='sicilia_stays_v1';
+const STAYHEADS=PEOPLE.reduce((s,p)=>s+cw(p.id,'hospedaje'),0); /* 7.25 puestos ponderados */
+const STAY_SEED=[]; /* precarga de opciones (se llena al pegar links); solo aplica en primer uso */
+let stays;{const _r=localStorage.getItem(SKEY);if(_r){try{stays=JSON.parse(_r)||[];}catch(e){stays=[];}}else{stays=STAY_SEED.slice();}}
+let sBase=ORDER[0];
+let sParking=true;
+function saveS(){try{localStorage.setItem(SKEY,JSON.stringify(stays));}catch(e){}}
+function nightsOf(bid){return BASES[bid]?BASES[bid].nights:1;}
+function stayMetrics(s){const ng=nightsOf(s.base);const perNight=s.price/ng;return{ng,perNight,perPP:perNight/STAYHEADS};}
+function renderStays(){
+  const pills=ORDER.map(id=>{const n=stays.filter(s=>s.base===id).length;return `<div class="pill ${id===sBase?'on':''}" data-sbase="${id}"><span class="pd" style="background:${BASES[id].color}"></span>${BASES[id].name}${n?` · ${n}`:''}</div>`;}).join('');
+  const b=BASES[sBase],sc=sched[sBase];
+  const list=stays.filter(s=>s.base===sBase);
+  let bestId=null,bestPP=Infinity;
+  list.forEach(s=>{const {perPP}=stayMetrics(s);if((s.cap==null||s.cap>=8)&&perPP<bestPP){bestPP=perPP;bestId=s.id;}});
+  const sorted=list.slice().sort((a,c)=>stayMetrics(a).perPP-stayMetrics(c).perPP);
+  const cards=sorted.map(s=>{
+    const {ng,perNight,perPP}=stayMetrics(s);
+    const capBad=s.cap!=null&&s.cap<8;
+    const specs=[];
+    if(s.rooms) specs.push(`<span class="stspec">🛏️ ${s.rooms} hab</span>`);
+    if(s.baths) specs.push(`<span class="stspec">🚿 ${s.baths} baños</span>`);
+    if(s.cap!=null) specs.push(`<span class="stspec ${capBad?'bad':'good'}">👥 ${s.cap}${capBad?' · faltan sitios':''}</span>`);
+    specs.push(`<span class="stspec ${s.parking?'good':'bad'}">🚗 ${s.parking?'parqueo en sitio':'sin parqueo'}</span>`);
+    return `<div class="stcard ${s.id===bestId?'best':''}">
+      <button class="stdel" data-sdel="${s.id}" aria-label="Eliminar">×</button>
+      <div class="sttop"><div class="stname">${s.name||'(sin nombre)'}${s.id===bestId?'<span class="stbadge">⭐ MEJOR PRECIO</span>':''}</div>${s.rating?`<span class="strate">★ ${s.rating}</span>`:''}</div>
+      <div class="stmetrics">
+        <div class="stmetric hero"><div class="mv">${money(perPP)}</div><div class="ml">noche / pers.</div></div>
+        <div class="stmetric"><div class="mv">${money(perNight)}</div><div class="ml">por noche</div></div>
+        <div class="stmetric"><div class="mv">${money(s.price)}</div><div class="ml">total · ${ng} N</div></div>
+      </div>
+      <div class="stspecs">${specs.join('')}</div>
+      ${s.notes?`<div class="stnotes">${s.notes}</div>`:''}
+      ${s.url?`<a class="stlink" href="${s.url}" target="_blank" rel="noopener">Ver anuncio ↗</a>`:''}
+    </div>`;
+  }).join('');
+  const summary=list.length?`${list.length} opción${list.length>1?'es':''} · mejor precio ${bestId?money(bestPP)+' /noche/pers.':'—'}`:'Sin opciones todavía';
+  const parkChips=`<div class="gchip paychip ${sParking?'on':''}" style="--c:#4ade80" data-park="1">🚗 Con parqueo</div><div class="gchip paychip ${!sParking?'on':''}" style="--c:#fb7185" data-park="0">🚫 Sin parqueo</div>`;
+  return `<div class="note luggage" style="margin-bottom:11px"><span class="ic">🏠</span><span>Compara casas por base. La <b>⭐ mejor</b> = menor precio por noche y persona entre las que caben los 8. El precio por persona se reparte entre <b>7,25 puestos</b> (Elina cuenta ¼ en hospedaje).</span></div>
+    <div class="pills">${pills}</div>
+    <div class="ddhd"><div><div class="ddt" style="color:${b.color}">${b.name}</div><div class="ddb">entra ${sc.from} oct · sale ${sc.to+1} oct · ${sc.n} noches</div></div></div>
+    <div class="staysum">${summary}</div>
+    ${cards||'<div style="color:var(--muted);font-size:12px;padding:2px 4px 12px">Aún no hay casas para esta base. Añade la primera abajo 👇</div>'}
+    <div class="gform" style="margin-top:6px">
+      <div><label>Nombre / apodo</label><input type="text" id="sName" placeholder="Villa con piscina · Airbnb"></div>
+      <div><label>Link (Airbnb / Booking)</label><input type="text" id="sUrl" inputmode="url" placeholder="https://…"></div>
+      <div><label>Precio total de la estancia (${nightsOf(sBase)} noches, €)</label><input type="text" id="sPrice" inputmode="decimal" placeholder="0,00"></div>
+      <div class="chrow">
+        <div style="flex:1;min-width:74px"><label>Habitac.</label><input type="text" id="sRooms" inputmode="numeric" placeholder="4"></div>
+        <div style="flex:1;min-width:74px"><label>Baños</label><input type="text" id="sBaths" inputmode="numeric" placeholder="2"></div>
+        <div style="flex:1;min-width:74px"><label>Capacidad</label><input type="text" id="sCap" inputmode="numeric" placeholder="8"></div>
+      </div>
+      <div><label>Parqueo en sitio</label><div class="chrow">${parkChips}</div></div>
+      <div><label>Rating (opcional)</label><input type="text" id="sRate" inputmode="decimal" placeholder="4,8"></div>
+      <div><label>Notas (opcional)</label><input type="text" id="sNotes" placeholder="A 10 min de la playa, terraza, ZTL…"></div>
+      <button class="gadd" id="sAddBtn">+ Añadir casa a ${b.name}</button>
+    </div>
+    <div class="gnote"><b>🔄 Sincronizado en vivo con la familia.</b> Todos ven las mismas casas al instante. El respaldo de abajo es solo por si acaso (uso offline).
+      <textarea id="sJson" readonly>${JSON.stringify(stays)}</textarea>
+      <div class="gbtns"><button id="sCopy">📋 Copiar respaldo</button><button id="sLoad">📥 Cargar pegado</button></div></div>`;
+}
+function bindStays(){
+  const body=document.getElementById('panelBody');
+  body.querySelectorAll('[data-sbase]').forEach(el=>el.onclick=()=>{sBase=el.dataset.sbase;renderPanel();body.scrollTop=0;});
+  body.querySelectorAll('[data-park]').forEach(el=>el.onclick=()=>{sParking=el.dataset.park==='1';body.querySelectorAll('[data-park]').forEach(x=>x.classList.toggle('on',x.dataset.park===(sParking?'1':'0')));});
+  body.querySelectorAll('[data-sdel]').forEach(el=>el.onclick=()=>{if(confirm('¿Eliminar esta casa?')){const sid=el.dataset.sdel;stays=stays.filter(s=>s.id!==sid);saveS();renderPanel();sbDel('alojamientos',sid);}});
+  const numOr=id=>{const v=(document.getElementById(id).value||'').trim().replace(',','.');const n=parseFloat(v);return isNaN(n)?null:n;};
+  const add=document.getElementById('sAddBtn');
+  if(add)add.onclick=()=>{
+    const name=document.getElementById('sName').value.trim();
+    const url=document.getElementById('sUrl').value.trim();
+    let raw=document.getElementById('sPrice').value.trim();
+    if(raw.indexOf(',')>=0) raw=raw.replace(/\./g,'').replace(',','.');
+    const price=parseFloat(raw);
+    if(!price||price<=0){alert('Pon un precio total válido.');return;}
+    const st={id:'s'+Date.now()+Math.floor(Math.random()*1000),base:sBase,name,url,price,rooms:numOr('sRooms'),baths:numOr('sBaths'),cap:numOr('sCap'),parking:sParking,rating:numOr('sRate'),notes:document.getElementById('sNotes').value.trim()};
+    stays.push(st);saveS();renderPanel();body.scrollTop=0;sbIns('alojamientos',sToRow(st));
+  };
+  const copy=document.getElementById('sCopy');
+  if(copy)copy.onclick=()=>{const ta=document.getElementById('sJson');ta.select();const done=()=>{copy.textContent='✓ Copiado';setTimeout(()=>copy.textContent='📋 Copiar respaldo',1500);};if(navigator.clipboard){navigator.clipboard.writeText(ta.value).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}};
+  const load=document.getElementById('sLoad');
+  if(load)load.onclick=()=>{const t=prompt('Pega aquí el respaldo (JSON) de casas:');if(!t)return;try{const arr=JSON.parse(t);if(Array.isArray(arr)){stays=arr;saveS();renderPanel();}else alert('Formato no válido.');}catch(e){alert('No se pudo leer el JSON.');}};
+}
+
+/* ============ Supabase (sync en vivo gastos + casas) ============ */
+const SB_URL='https://akfjdwchexpajgqaccca.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFrZmpkd2NoZXhwYWpncWFjY2NhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzMzcwNDUsImV4cCI6MjA5ODkxMzA0NX0.hoqd2hc1dN0U__UEKrF0VfXhtTlyuePMjWZOFXR8wyM';
+let sb=null;
+try{ if(window.supabase&&window.supabase.createClient) sb=window.supabase.createClient(SB_URL,SB_KEY); }catch(e){ sb=null; }
+const numN=v=>(v===null||v===undefined||v==='')?null:Number(v);
+/* gasto <-> fila tabla gastos */
+const gToRow=e=>({id:e.id,fecha:e.date,descripcion:e.desc||'',monto:e.amount,pago:e.paidBy,tipo:e.cat||'normal',para:(e.forWhom&&e.forWhom.length)?e.forWhom:[]});
+const gFromRow=r=>({id:r.id,date:r.fecha,desc:r.descripcion||'',amount:Number(r.monto),paidBy:r.pago,cat:r.tipo||'normal',forWhom:Array.isArray(r.para)?r.para:[]});
+/* casa <-> fila tabla alojamientos */
+const sToRow=s=>({id:s.id,base:s.base,nombre:s.name||'',url:s.url||'',precio:s.price,habitaciones:numN(s.rooms),banos:numN(s.baths),capacidad:numN(s.cap),parqueo:!!s.parking,rating:numN(s.rating),notas:s.notes||''});
+const sFromRow=r=>({id:r.id,base:r.base,name:r.nombre||'',url:r.url||'',price:Number(r.precio),rooms:numN(r.habitaciones),baths:numN(r.banos),cap:numN(r.capacidad),parking:r.parqueo!==false,rating:numN(r.rating),notes:r.notas||''});
+let sbReady=false;
+async function sbLoad(){
+  if(!sb) return;
+  try{
+    const [g,a]=await Promise.all([
+      sb.from('gastos').select('*').order('created_at',{ascending:true}),
+      sb.from('alojamientos').select('*').order('created_at',{ascending:true}),
+    ]);
+    if(g.error||a.error){console.warn('Supabase load',g.error||a.error);return;}
+    sbReady=true;
+    /* primera vez: si la nube está vacía pero hay datos locales, súbelos (migración) */
+    if(g.data.length===0 && expenses.length){ await sb.from('gastos').insert(expenses.map(gToRow)); }
+    else { expenses=g.data.map(gFromRow); saveG(); }
+    if(a.data.length===0 && stays.length){ await sb.from('alojamientos').insert(stays.map(sToRow)); }
+    else { stays=a.data.map(sFromRow); saveS(); }
+    renderPanel();
+  }catch(e){ console.warn('Supabase load falló',e); }
+}
+async function sbRefresh(which){
+  if(!sb||!sbReady) return;
+  try{
+    if(which==='gastos'){const {data,error}=await sb.from('gastos').select('*').order('created_at',{ascending:true});if(!error){expenses=data.map(gFromRow);saveG();if(view==='gastos')renderPanel();}}
+    else{const {data,error}=await sb.from('alojamientos').select('*').order('created_at',{ascending:true});if(!error){stays=data.map(sFromRow);saveS();if(view==='stay')renderPanel();}}
+  }catch(e){}
+}
+function sbSubscribe(){
+  if(!sb) return;
+  try{
+    sb.channel('sicilia-rt')
+      .on('postgres_changes',{event:'*',schema:'public',table:'gastos'},()=>sbRefresh('gastos'))
+      .on('postgres_changes',{event:'*',schema:'public',table:'alojamientos'},()=>sbRefresh('alojamientos'))
+      .subscribe();
+  }catch(e){}
+}
+async function sbIns(table,row){ if(!sb||!sbReady) return; try{const {error}=await sb.from(table).insert(row);if(error){console.warn('insert',table,error);alert('No se pudo guardar en la nube. Se guardó solo en este dispositivo.');}}catch(e){} }
+async function sbDel(table,id){ if(!sb||!sbReady) return; try{await sb.from(table).delete().eq('id',id);}catch(e){} }
 
 /* ============ Fotos (Wikimedia Commons, fijas) ============ */
 const U='https://upload.wikimedia.org/wikipedia/commons/thumb/';
@@ -553,6 +712,7 @@ function renderAgendaView(){
 function renderPanel(){
   const body=document.getElementById('panelBody');
   if(view==='gastos'){body.innerHTML=renderGastos();bindGastos();return;}
+  if(view==='stay'){body.innerHTML=renderStays();bindStays();return;}
   body.innerHTML = view==='agenda'?renderAgendaView():renderMapView();
   body.querySelectorAll('[data-poi]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();flyTo(el.getAttribute('data-poi'));if(window.innerWidth<=820)closeSheet();}));
   if(view==='agenda'){
@@ -584,6 +744,7 @@ window.addEventListener('resize',()=>map.invalidateSize());
 drawMap();renderPanel();
 map.fitBounds(L.latLngBounds(Object.values(POI).map(p=>[p.lat,p.lng])).pad(0.12));
 setTimeout(()=>map.invalidateSize(),200);
+sbSubscribe();sbLoad();
 </script>
 </body>
 </html>
