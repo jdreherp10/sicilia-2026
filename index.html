@@ -191,6 +191,13 @@
   .sfillmsg.ok{color:#86efac}
   .sfillmsg.warn{color:#fda4af}
   .sfillmsg.busy{color:var(--muted)}
+  /* Extras / tasas en efectivo */
+  .stextras{background:rgba(233,185,73,.07);border:1px solid rgba(233,185,73,.28);border-radius:10px;padding:8px 10px;margin-bottom:9px}
+  .stextra{display:flex;justify-content:space-between;gap:8px;font-size:11.5px;color:var(--txt);padding:2px 0}
+  .stextra.tot{font-weight:800;color:#f0dca6;border-bottom:1px solid rgba(233,185,73,.2);padding-bottom:5px;margin-bottom:3px}
+  .stextra.dep{color:var(--muted)}
+  .stextra span:last-child{white-space:nowrap;font-weight:700}
+  .stextranote{font-size:10px;color:var(--muted);line-height:1.4;margin-top:5px}
 </style>
 </head>
 <body>
@@ -479,9 +486,25 @@ let stays;{const _r=localStorage.getItem(SKEY);if(_r){try{stays=JSON.parse(_r)||
 let sBase=ORDER[0];
 let sParking=true;
 let sFoto=null; /* foto traída por el auto-relleno, se adjunta al añadir la casa */
+let sExtras=[]; /* tasas/efectivo detectadas por el auto-relleno, se adjuntan al añadir la casa */
 function saveS(){try{localStorage.setItem(SKEY,JSON.stringify(stays));}catch(e){}}
 function nightsOf(bid){return BASES[bid]?BASES[bid].nights:1;}
-function stayMetrics(s){const ng=nightsOf(s.base);const perNight=s.price/ng;return{ng,perNight,perPP:perNight/STAYHEADS};}
+const TAXHEADS=PEOPLE.length; /* personas físicas para tasas por persona (los 8; niños suelen estar exentos) */
+const EXTRA_ETQ={tasa:{ic:'🏛️',n:'Tasa turística'},limpieza:{ic:'🧹',n:'Limpieza'},deposito:{ic:'🔐',n:'Depósito'},efectivo:{ic:'💵',n:'Pago en efectivo'}};
+/* Coste de un extra según su unidad, para las noches de esa base. Los depósitos NO son coste (reembolsables). */
+function extraCost(x,ng){
+  if(!x||x.cat==='deposito'||x.monto==null)return 0;
+  const m=Number(x.monto);if(isNaN(m))return 0;
+  switch(x.unidad){
+    case 'persona_noche':return m*TAXHEADS*ng;
+    case 'persona':return m*TAXHEADS;
+    case 'noche':return m*ng;
+    default:return m; /* estancia */
+  }
+}
+function extrasTotal(s,ng){return (s.extras||[]).reduce((t,x)=>t+extraCost(x,ng),0);}
+function depositosTotal(s){return (s.extras||[]).filter(x=>x.cat==='deposito'&&x.monto!=null).reduce((t,x)=>t+Number(x.monto||0),0);}
+function stayMetrics(s){const ng=nightsOf(s.base);const extra=extrasTotal(s,ng);const total=(s.price||0)+extra;const perNight=total/ng;return{ng,extra,total,perNight,perPP:perNight/STAYHEADS};}
 function renderStays(){
   const pills=ORDER.map(id=>{const n=stays.filter(s=>s.base===id).length;return `<div class="pill ${id===sBase?'on':''}" data-sbase="${id}"><span class="pd" style="background:${BASES[id].color}"></span>${BASES[id].name}${n?` · ${n}`:''}</div>`;}).join('');
   const b=BASES[sBase],sc=sched[sBase];
@@ -490,13 +513,26 @@ function renderStays(){
   list.forEach(s=>{const {perPP}=stayMetrics(s);if((s.cap==null||s.cap>=8)&&perPP<bestPP){bestPP=perPP;bestId=s.id;}});
   const sorted=list.slice().sort((a,c)=>stayMetrics(a).perPP-stayMetrics(c).perPP);
   const cards=sorted.map(s=>{
-    const {ng,perNight,perPP}=stayMetrics(s);
+    const {ng,extra,total,perNight,perPP}=stayMetrics(s);
     const capBad=s.cap!=null&&s.cap<8;
     const specs=[];
     if(s.rooms) specs.push(`<span class="stspec">🛏️ ${s.rooms} hab</span>`);
     if(s.baths) specs.push(`<span class="stspec">🚿 ${s.baths} baños</span>`);
     if(s.cap!=null) specs.push(`<span class="stspec ${capBad?'bad':'good'}">👥 ${s.cap}${capBad?' · faltan sitios':''}</span>`);
     specs.push(`<span class="stspec ${s.parking?'good':'bad'}">🚗 ${s.parking?'parqueo en sitio':'sin parqueo'}</span>`);
+    /* desglose de tasas/efectivo */
+    const dep=depositosTotal(s);
+    const extrasRows=(s.extras||[]).map(x=>{
+      const c=extraCost(x,ng);
+      const et=EXTRA_ETQ[x.cat]||{ic:'💶',n:'Extra en efectivo'};
+      const detalle=x.cat==='deposito'?`${money(x.monto)} reembolsable`:(c?`${money(c)}${x.unidad==='persona_noche'?` · ${money(x.monto)}/pers./noche`:''}`:'ver anuncio');
+      return `<div class="stextra ${x.cat==='deposito'?'dep':''}"><span>${et.ic} ${et.n}</span><span>${detalle}</span></div>`;
+    }).join('');
+    const extrasBox=(s.extras&&s.extras.length)?`<div class="stextras">
+        ${extra?`<div class="stextra tot"><span>💶 Extras en efectivo${dep?' (sin depósito)':''}</span><span>+ ${money(extra)}</span></div>`:''}
+        ${extrasRows}
+        <div class="stextranote">Estimado para ${TAXHEADS} personas × ${ng} noches. Los niños suelen estar exentos de la tasa: ajústalo si aplica.</div>
+      </div>`:'';
     return `<div class="stcard ${s.id===bestId?'best':''}">
       <button class="stdel" data-sdel="${s.id}" aria-label="Eliminar">×</button>
       ${s.foto?`<img class="stthumb" src="${s.foto}" alt="" loading="lazy" onerror="this.style.display='none'">`:''}
@@ -504,8 +540,9 @@ function renderStays(){
       <div class="stmetrics">
         <div class="stmetric hero"><div class="mv">${money(perPP)}</div><div class="ml">noche / pers.</div></div>
         <div class="stmetric"><div class="mv">${money(perNight)}</div><div class="ml">por noche</div></div>
-        <div class="stmetric"><div class="mv">${money(s.price)}</div><div class="ml">total · ${ng} N</div></div>
+        <div class="stmetric"><div class="mv">${money(total)}</div><div class="ml">total${extra?' c/extras':''} · ${ng} N</div></div>
       </div>
+      ${extrasBox}
       <div class="stspecs">${specs.join('')}</div>
       ${s.notes?`<div class="stnotes">${s.notes}</div>`:''}
       ${s.url?`<a class="stlink" href="${s.url}" target="_blank" rel="noopener">Ver anuncio ↗</a>`:''}
@@ -553,8 +590,8 @@ function bindStays(){
     if(raw.indexOf(',')>=0) raw=raw.replace(/\./g,'').replace(',','.');
     const price=parseFloat(raw);
     if(!price||price<=0){alert('Pon un precio total válido.');return;}
-    const st={id:'s'+Date.now()+Math.floor(Math.random()*1000),base:sBase,name,url,price,rooms:numOr('sRooms'),baths:numOr('sBaths'),cap:numOr('sCap'),parking:sParking,rating:numOr('sRate'),notes:document.getElementById('sNotes').value.trim(),foto:sFoto};
-    stays.push(st);sFoto=null;saveS();renderPanel();body.scrollTop=0;sbIns('alojamientos',sToRow(st));
+    const st={id:'s'+Date.now()+Math.floor(Math.random()*1000),base:sBase,name,url,price,rooms:numOr('sRooms'),baths:numOr('sBaths'),cap:numOr('sCap'),parking:sParking,rating:numOr('sRate'),notes:document.getElementById('sNotes').value.trim(),foto:sFoto,extras:sExtras.slice()};
+    stays.push(st);sFoto=null;sExtras=[];saveS();renderPanel();body.scrollTop=0;sbIns('alojamientos',sToRow(st));
   };
   /* Auto-relleno: la Edge Function abre el anuncio del lado del servidor y devuelve lo legible. */
   const fill=document.getElementById('sFillBtn');
@@ -591,9 +628,21 @@ function bindStays(){
     const notas=[d.camas?`${d.camas} camas`:null,d.descripcion].filter(Boolean).join(' · ');
     if(notas){const el=document.getElementById('sNotes');if(el&&!el.value.trim()){el.value=notas;puesto.push('notas');}}
     if(d.foto){sFoto=d.foto;puesto.push('foto');}
+    /* tasas / efectivo detectadas en la descripción */
+    sExtras=Array.isArray(d.tasas)?d.tasas.filter(x=>x&&x.texto):[];
+    let tasaMsg='';
+    if(sExtras.length){
+      const ng=nightsOf(sBase);
+      const costo=sExtras.reduce((t,x)=>t+extraCost(x,ng),0);
+      const dep=sExtras.filter(x=>x.cat==='deposito'&&x.monto!=null).reduce((t,x)=>t+Number(x.monto||0),0);
+      const partes=[];
+      if(costo)partes.push(`~${money(costo)} en tasas/efectivo (para ${TAXHEADS} pers. × ${ng} noches)`);
+      if(dep)partes.push(`depósito ${money(dep)} reembolsable`);
+      tasaMsg=` 💶 Detecté ${partes.join(' + ')||'posibles pagos en efectivo'}: se suman al total al guardar (revísalos en el anuncio).`;
+    }
     const capMala=d.capacidad!=null&&d.capacidad<8;
     const base=puesto.length?`✓ ${d.fuente}: ${puesto.join(', ')}. Falta el precio: ponlo tú.`:`Leí ${d.fuente} pero los campos ya tenían datos (no los piso). El precio siempre es manual.`;
-    setMsg(capMala?`${base} ⚠️ Capacidad ${d.capacidad}: no caben los 8.`:base,capMala?'warn':'ok');
+    setMsg(`${base}${capMala?` ⚠️ Capacidad ${d.capacidad}: no caben los 8.`:''}${tasaMsg}`,capMala?'warn':'ok');
   };
   const copy=document.getElementById('sCopy');
   if(copy)copy.onclick=()=>{const ta=document.getElementById('sJson');ta.select();const done=()=>{copy.textContent='✓ Copiado';setTimeout(()=>copy.textContent='📋 Copiar respaldo',1500);};if(navigator.clipboard){navigator.clipboard.writeText(ta.value).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}};
@@ -611,8 +660,8 @@ const numN=v=>(v===null||v===undefined||v==='')?null:Number(v);
 const gToRow=e=>({id:e.id,fecha:e.date,descripcion:e.desc||'',monto:e.amount,pago:e.paidBy,tipo:e.cat||'normal',para:(e.forWhom&&e.forWhom.length)?e.forWhom:[]});
 const gFromRow=r=>({id:r.id,date:r.fecha,desc:r.descripcion||'',amount:Number(r.monto),paidBy:r.pago,cat:r.tipo||'normal',forWhom:Array.isArray(r.para)?r.para:[]});
 /* casa <-> fila tabla alojamientos */
-const sToRow=s=>({id:s.id,base:s.base,nombre:s.name||'',url:s.url||'',precio:s.price,habitaciones:numN(s.rooms),banos:numN(s.baths),capacidad:numN(s.cap),parqueo:!!s.parking,rating:numN(s.rating),notas:s.notes||'',foto:s.foto||null});
-const sFromRow=r=>({id:r.id,base:r.base,name:r.nombre||'',url:r.url||'',price:Number(r.precio),rooms:numN(r.habitaciones),baths:numN(r.banos),cap:numN(r.capacidad),parking:r.parqueo!==false,rating:numN(r.rating),notes:r.notas||'',foto:r.foto||null});
+const sToRow=s=>({id:s.id,base:s.base,nombre:s.name||'',url:s.url||'',precio:s.price,habitaciones:numN(s.rooms),banos:numN(s.baths),capacidad:numN(s.cap),parqueo:!!s.parking,rating:numN(s.rating),notas:s.notes||'',foto:s.foto||null,extras:Array.isArray(s.extras)?s.extras:[]});
+const sFromRow=r=>({id:r.id,base:r.base,name:r.nombre||'',url:r.url||'',price:Number(r.precio),rooms:numN(r.habitaciones),baths:numN(r.banos),cap:numN(r.capacidad),parking:r.parqueo!==false,rating:numN(r.rating),notes:r.notas||'',foto:r.foto||null,extras:Array.isArray(r.extras)?r.extras:[]});
 let sbReady=false;
 async function sbLoad(){
   if(!sb) return;

@@ -68,6 +68,81 @@ const num = (s: string | undefined | null): number | null => {
   return isNaN(n) ? null : n;
 };
 
+// ---- Tasas / pagos en efectivo escondidos en la descripción ----
+// Muchos caseros de Sicilia cobran la "tassa di soggiorno" y otros extras
+// en efectivo a la llegada, fuera de la plataforma. Los sacamos del texto.
+type Tasa = { texto: string; monto: number | null; unidad: string | null; cat: string; efectivo: boolean };
+
+const normTxt = (s: string) => s.replace(/\s+/g, " ").trim();
+
+function montoDe(str: string): number | null {
+  const cur = "(?:€|eur(?:os?)?|euro)";
+  const n = "(\\d{1,4}(?:[.,]\\d{1,2})?)";
+  const m = str.match(new RegExp(cur + "\\s*" + n, "i")) || str.match(new RegExp(n + "\\s*" + cur, "i"));
+  if (!m) return null;
+  const v = Number(m[1].replace(/\.(?=\d{3}\b)/g, "").replace(",", "."));
+  return isNaN(v) ? null : v;
+}
+
+function unidadDe(str: string): string {
+  const s = str.toLowerCase();
+  const perPerson = /(per|a|por)\s+person\w*|\/\s*person|p\/?p\b|por\s+persona|a\s+persona/.test(s);
+  const perNight = /(per|a|por)\s+(night|notte|noche)|\/\s*(night|notte|noche)|por\s+noche|a\s+notte|per\s+notte|(?:y|e|and)\s+(noche|notte|night)/.test(s)
+    || (perPerson && /\b(noche|notte|nights?)\b/.test(s));
+  if (perPerson && perNight) return "persona_noche";
+  if (perNight) return "noche";
+  if (perPerson) return "persona";
+  return "estancia";
+}
+
+function categoriaDe(s: string): string {
+  if (/cauzion\w*|deposito?\s+cauzional\w*|security\s+deposit|fianza|dep[oó]sito\s+reembols\w*|caparra/i.test(s)) return "deposito";
+  if (/tassa|imposta|soggiorno|city\s*tax|tourist\s*tax|visitor'?s?\s*tax|tasa\s+tur|impuesto\s+tur|tasa\s+de\s+alojam/i.test(s)) return "tasa";
+  if (/pulizi\w*|cleaning|limpiez\w*/i.test(s)) return "limpieza";
+  return "efectivo";
+}
+
+function detectarTasas(texto: string): Tasa[] {
+  if (!texto) return [];
+  const frases = normTxt(texto).split(/(?<=[.!?])\s+|(?:\s*[•·\-–]\s+)|\n+/);
+  const KEY = /(tassa|imposta)\s+di\s+soggiorno|city\s*tax|tourist\s*tax|visitor'?s?\s*tax|tasa\s+(tur[ií]stica|de\s+alojamiento)|impuesto\s+(tur[ií]stico|de\s+estancia)|soggiorno|in\s+contanti|en\s+efectivo|in\s+cash|paid?\s+in\s+cash|contanti|pago\s+en\s+efectivo|cash\s+(?:to|al|payment|on)|cauzion\w*|security\s+deposit|fianza|caparra/i;
+  const CASH = /contanti|efectivo|cash/i;
+  const out: Tasa[] = [];
+  const vistos = new Set<string>();
+  for (const f of frases) {
+    if (!KEY.test(f)) continue;
+    const texto = normTxt(f).slice(0, 200);
+    if (vistos.has(texto)) continue;
+    vistos.add(texto);
+    const monto = montoDe(f);
+    out.push({ texto, monto, unidad: monto ? unidadDe(f) : null, cat: categoriaDe(f), efectivo: CASH.test(f) });
+    if (out.length >= 6) break;
+  }
+  return out;
+}
+
+// Extrae el texto completo de la descripción del bootstrap de Airbnb.
+function descripcionAirbnb(html: string): string {
+  const partes: string[] = [];
+  // htmlDescription.htmlText (descripción principal)
+  const i = html.indexOf('"htmlDescription"');
+  if (i >= 0) {
+    const m = html.slice(i, i + 8000).match(/"htmlText":"((?:[^"\\]|\\.)*)"/);
+    if (m) partes.push(m[1]);
+  }
+  // Otros bloques de texto (reglas de la casa, notas del anfitrión) suelen traer las tasas
+  const re = /"localizedStringWithTranslationPreference":"((?:[^"\\]|\\.)*)"/g;
+  let mm: RegExpExecArray | null;
+  let n = 0;
+  while ((mm = re.exec(html)) !== null && n < 8) { partes.push(mm[1]); n++; }
+  let t = partes.join("\n");
+  // desescapar y quitar etiquetas
+  t = t.replace(/\\u003c[^\\]*?\\u003e/g, " ").replace(/\\n/g, "\n").replace(/\\t/g, " ")
+       .replace(/\\"/g, '"').replace(/\\\//g, "/").replace(/\\u0026/g, "&")
+       .replace(/<[^>]+>/g, " ");
+  return decode(t);
+}
+
 /** Lee las especificaciones del og:title de Airbnb (inglés y español). */
 function specsAirbnb(titulo: string) {
   const rating = num(titulo.match(/★\s*([\d.,]+)/)?.[1]);
@@ -149,6 +224,7 @@ Deno.serve(async (req: Request) => {
   let banos: number | null = null;
   let capacidad: number | null = null;
 
+  let textoTasas = ogDesc || "";
   if (esAirbnb && ogTitle) {
     // En Airbnb el og:description es el título real del anuncio y el og:title trae las specs.
     nombre = ogDesc || ogTitle;
@@ -156,6 +232,8 @@ Deno.serve(async (req: Request) => {
     const s = specsAirbnb(ogTitle);
     rating = s.rating; habitaciones = s.habitaciones; camas = s.camas; banos = s.banos;
     capacidad = num(html.match(/"personCapacity"\s*:\s*(\d+)/)?.[1]);
+    const larga = descripcionAirbnb(html);
+    if (larga) textoTasas = larga; // la descripción completa es donde viven las tasas
   } else {
     nombre = ogTitle || (html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] ? decode(html.match(/<title[^>]*>([^<]*)<\/title>/i)![1]) : null);
     descripcion = ogDesc;
@@ -168,13 +246,16 @@ Deno.serve(async (req: Request) => {
   let foto: string | null = ogImg;
   if (foto) { try { foto = new URL(foto, final.toString()).toString(); } catch { foto = null; } }
 
+  const tasas = detectarTasas(textoTasas);
+
   return json({
     nombre: nombre ? nombre.slice(0, 120) : null,
     foto,
     descripcion: descripcion ? descripcion.slice(0, 300) : null,
     rating, habitaciones, camas, banos, capacidad,
+    tasas, // extras/tasas en efectivo detectadas en la descripción (puede venir vacío)
     fuente: host,
-    // El precio nunca viene: depende de fechas y lo carga por JS.
-    aviso: "El precio no se puede leer automáticamente: ponlo a mano.",
+    // El precio de la reserva no viene: depende de fechas y lo carga por JS.
+    aviso: "El precio base no se puede leer automáticamente: ponlo a mano.",
   });
 });
