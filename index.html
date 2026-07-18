@@ -179,6 +179,18 @@
   .stnotes{font-size:11.5px;color:var(--muted);line-height:1.45;margin:0 0 9px}
   .stlink{display:inline-block;font-size:12px;font-weight:700;color:var(--accent);text-decoration:none;border:1px solid rgba(56,189,248,.35);border-radius:9px;padding:7px 12px}
   .stlink:hover{background:rgba(56,189,248,.1)}
+  .stthumb{width:100%;height:132px;object-fit:cover;border-radius:10px;border:1px solid var(--line);margin-bottom:10px;background:var(--bg);display:block}
+  /* Auto-relleno desde el link */
+  .urlrow{display:flex;gap:6px;align-items:stretch}
+  .urlrow input{flex:1;min-width:0}
+  .sfill{flex:0 0 auto;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.4);color:var(--accent);border-radius:9px;padding:0 12px;font-size:12.5px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap}
+  .sfill:hover:not(:disabled){background:rgba(56,189,248,.22)}
+  .sfill:disabled{opacity:.55;cursor:default}
+  .sfillmsg{font-size:11px;line-height:1.45;margin-top:6px;display:none}
+  .sfillmsg.on{display:block}
+  .sfillmsg.ok{color:#86efac}
+  .sfillmsg.warn{color:#fda4af}
+  .sfillmsg.busy{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -466,6 +478,7 @@ const STAY_SEED=[]; /* precarga de opciones (se llena al pegar links); solo apli
 let stays;{const _r=localStorage.getItem(SKEY);if(_r){try{stays=JSON.parse(_r)||[];}catch(e){stays=[];}}else{stays=STAY_SEED.slice();}}
 let sBase=ORDER[0];
 let sParking=true;
+let sFoto=null; /* foto traída por el auto-relleno, se adjunta al añadir la casa */
 function saveS(){try{localStorage.setItem(SKEY,JSON.stringify(stays));}catch(e){}}
 function nightsOf(bid){return BASES[bid]?BASES[bid].nights:1;}
 function stayMetrics(s){const ng=nightsOf(s.base);const perNight=s.price/ng;return{ng,perNight,perPP:perNight/STAYHEADS};}
@@ -486,6 +499,7 @@ function renderStays(){
     specs.push(`<span class="stspec ${s.parking?'good':'bad'}">🚗 ${s.parking?'parqueo en sitio':'sin parqueo'}</span>`);
     return `<div class="stcard ${s.id===bestId?'best':''}">
       <button class="stdel" data-sdel="${s.id}" aria-label="Eliminar">×</button>
+      ${s.foto?`<img class="stthumb" src="${s.foto}" alt="" loading="lazy" onerror="this.style.display='none'">`:''}
       <div class="sttop"><div class="stname">${s.name||'(sin nombre)'}${s.id===bestId?'<span class="stbadge">⭐ MEJOR PRECIO</span>':''}</div>${s.rating?`<span class="strate">★ ${s.rating}</span>`:''}</div>
       <div class="stmetrics">
         <div class="stmetric hero"><div class="mv">${money(perPP)}</div><div class="ml">noche / pers.</div></div>
@@ -506,7 +520,10 @@ function renderStays(){
     ${cards||'<div style="color:var(--muted);font-size:12px;padding:2px 4px 12px">Aún no hay casas para esta base. Añade la primera abajo 👇</div>'}
     <div class="gform" style="margin-top:6px">
       <div><label>Nombre / apodo</label><input type="text" id="sName" placeholder="Villa con piscina · Airbnb"></div>
-      <div><label>Link (Airbnb / Booking)</label><input type="text" id="sUrl" inputmode="url" placeholder="https://…"></div>
+      <div><label>Link (Airbnb / Booking)</label>
+        <div class="urlrow"><input type="text" id="sUrl" inputmode="url" placeholder="https://…"><button class="sfill" id="sFillBtn" type="button">✨ Rellenar</button></div>
+        <div class="sfillmsg" id="sFillMsg"></div>
+      </div>
       <div><label>Precio total de la estancia (${nightsOf(sBase)} noches, €)</label><input type="text" id="sPrice" inputmode="decimal" placeholder="0,00"></div>
       <div class="chrow">
         <div style="flex:1;min-width:74px"><label>Habitac.</label><input type="text" id="sRooms" inputmode="numeric" placeholder="4"></div>
@@ -536,8 +553,47 @@ function bindStays(){
     if(raw.indexOf(',')>=0) raw=raw.replace(/\./g,'').replace(',','.');
     const price=parseFloat(raw);
     if(!price||price<=0){alert('Pon un precio total válido.');return;}
-    const st={id:'s'+Date.now()+Math.floor(Math.random()*1000),base:sBase,name,url,price,rooms:numOr('sRooms'),baths:numOr('sBaths'),cap:numOr('sCap'),parking:sParking,rating:numOr('sRate'),notes:document.getElementById('sNotes').value.trim()};
-    stays.push(st);saveS();renderPanel();body.scrollTop=0;sbIns('alojamientos',sToRow(st));
+    const st={id:'s'+Date.now()+Math.floor(Math.random()*1000),base:sBase,name,url,price,rooms:numOr('sRooms'),baths:numOr('sBaths'),cap:numOr('sCap'),parking:sParking,rating:numOr('sRate'),notes:document.getElementById('sNotes').value.trim(),foto:sFoto};
+    stays.push(st);sFoto=null;saveS();renderPanel();body.scrollTop=0;sbIns('alojamientos',sToRow(st));
+  };
+  /* Auto-relleno: la Edge Function abre el anuncio del lado del servidor y devuelve lo legible. */
+  const fill=document.getElementById('sFillBtn');
+  const fmsg=document.getElementById('sFillMsg');
+  const setMsg=(txt,cls)=>{if(fmsg){fmsg.className='sfillmsg on '+cls;fmsg.textContent=txt;}};
+  if(fill)fill.onclick=async()=>{
+    const u=(document.getElementById('sUrl').value||'').trim();
+    if(!u){setMsg('Pega primero el link del anuncio.','warn');return;}
+    if(!sb){setMsg('Sin conexión con la nube: llena los datos a mano.','warn');return;}
+    const prev=fill.textContent;
+    fill.disabled=true;fill.textContent='⏳';setMsg('Abriendo el anuncio…','busy');
+    let d=null,err=null;
+    try{
+      const r=await sb.functions.invoke('resumen-link',{body:{url:u}});
+      if(r.error){
+        try{const j=await r.error.context.json();err=j&&j.error;}catch(e){}
+        if(!err)err='No se pudo leer el anuncio. Llena los datos a mano.';
+      }else if(r.data&&r.data.error){err=r.data.error;}
+      else d=r.data;
+    }catch(e){err='No se pudo contactar el lector de links.';}
+    fill.disabled=false;fill.textContent=prev;
+    if(err||!d){setMsg(err||'No se pudo leer el anuncio.','warn');return;}
+    const puesto=[];
+    const set=(id,v,etiqueta)=>{
+      if(v===null||v===undefined||v==='')return;
+      const el=document.getElementById(id);
+      if(el&&!el.value.trim()){el.value=String(v).replace('.',',');if(etiqueta)puesto.push(etiqueta);}
+    };
+    if(d.nombre){const el=document.getElementById('sName');if(el&&!el.value.trim()){el.value=d.nombre;puesto.push('nombre');}}
+    set('sRate',d.rating,d.rating?`★ ${d.rating}`:null);
+    set('sRooms',d.habitaciones,d.habitaciones?`${d.habitaciones} hab`:null);
+    set('sBaths',d.banos,d.banos?`${d.banos} baños`:null);
+    set('sCap',d.capacidad,d.capacidad?`capacidad ${d.capacidad}`:null);
+    const notas=[d.camas?`${d.camas} camas`:null,d.descripcion].filter(Boolean).join(' · ');
+    if(notas){const el=document.getElementById('sNotes');if(el&&!el.value.trim()){el.value=notas;puesto.push('notas');}}
+    if(d.foto){sFoto=d.foto;puesto.push('foto');}
+    const capMala=d.capacidad!=null&&d.capacidad<8;
+    const base=puesto.length?`✓ ${d.fuente}: ${puesto.join(', ')}. Falta el precio: ponlo tú.`:`Leí ${d.fuente} pero los campos ya tenían datos (no los piso). El precio siempre es manual.`;
+    setMsg(capMala?`${base} ⚠️ Capacidad ${d.capacidad}: no caben los 8.`:base,capMala?'warn':'ok');
   };
   const copy=document.getElementById('sCopy');
   if(copy)copy.onclick=()=>{const ta=document.getElementById('sJson');ta.select();const done=()=>{copy.textContent='✓ Copiado';setTimeout(()=>copy.textContent='📋 Copiar respaldo',1500);};if(navigator.clipboard){navigator.clipboard.writeText(ta.value).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}};
@@ -555,8 +611,8 @@ const numN=v=>(v===null||v===undefined||v==='')?null:Number(v);
 const gToRow=e=>({id:e.id,fecha:e.date,descripcion:e.desc||'',monto:e.amount,pago:e.paidBy,tipo:e.cat||'normal',para:(e.forWhom&&e.forWhom.length)?e.forWhom:[]});
 const gFromRow=r=>({id:r.id,date:r.fecha,desc:r.descripcion||'',amount:Number(r.monto),paidBy:r.pago,cat:r.tipo||'normal',forWhom:Array.isArray(r.para)?r.para:[]});
 /* casa <-> fila tabla alojamientos */
-const sToRow=s=>({id:s.id,base:s.base,nombre:s.name||'',url:s.url||'',precio:s.price,habitaciones:numN(s.rooms),banos:numN(s.baths),capacidad:numN(s.cap),parqueo:!!s.parking,rating:numN(s.rating),notas:s.notes||''});
-const sFromRow=r=>({id:r.id,base:r.base,name:r.nombre||'',url:r.url||'',price:Number(r.precio),rooms:numN(r.habitaciones),baths:numN(r.banos),cap:numN(r.capacidad),parking:r.parqueo!==false,rating:numN(r.rating),notes:r.notas||''});
+const sToRow=s=>({id:s.id,base:s.base,nombre:s.name||'',url:s.url||'',precio:s.price,habitaciones:numN(s.rooms),banos:numN(s.baths),capacidad:numN(s.cap),parqueo:!!s.parking,rating:numN(s.rating),notas:s.notes||'',foto:s.foto||null});
+const sFromRow=r=>({id:r.id,base:r.base,name:r.nombre||'',url:r.url||'',price:Number(r.precio),rooms:numN(r.habitaciones),baths:numN(r.banos),cap:numN(r.capacidad),parking:r.parqueo!==false,rating:numN(r.rating),notes:r.notas||'',foto:r.foto||null});
 let sbReady=false;
 async function sbLoad(){
   if(!sb) return;
