@@ -490,7 +490,8 @@ let sExtras=[]; /* tasas/efectivo detectadas por el auto-relleno, se adjuntan al
 function saveS(){try{localStorage.setItem(SKEY,JSON.stringify(stays));}catch(e){}}
 function nightsOf(bid){return BASES[bid]?BASES[bid].nights:1;}
 const TAXHEADS=PEOPLE.length; /* personas físicas para tasas por persona (los 8; niños suelen estar exentos) */
-const EXTRA_ETQ={tasa:{ic:'🏛️',n:'Tasa turística'},limpieza:{ic:'🧹',n:'Limpieza'},deposito:{ic:'🔐',n:'Depósito'},efectivo:{ic:'💵',n:'Pago en efectivo'}};
+const EXTRA_ETQ={tasa:{ic:'🏛️',n:'Tasa turística'},limpieza:{ic:'🧹',n:'Limpieza'},ropa:{ic:'🛏️',n:'Ropa de cama'},consumo:{ic:'💡',n:'Consumos'},deposito:{ic:'🔐',n:'Depósito'},efectivo:{ic:'💵',n:'Pago en efectivo'}};
+const UNI_TXT={persona_noche:'/pers./noche',persona:'/persona',noche:'/noche',semana:'/semana',estancia:''};
 /* Coste de un extra según su unidad, para las noches de esa base. Los depósitos NO son coste (reembolsables). */
 function extraCost(x,ng){
   if(!x||x.cat==='deposito'||x.monto==null)return 0;
@@ -499,6 +500,7 @@ function extraCost(x,ng){
     case 'persona_noche':return m*TAXHEADS*ng;
     case 'persona':return m*TAXHEADS;
     case 'noche':return m*ng;
+    case 'semana':return m*Math.ceil(ng/7);
     default:return m; /* estancia */
   }
 }
@@ -525,7 +527,8 @@ function renderStays(){
     const extrasRows=(s.extras||[]).map(x=>{
       const c=extraCost(x,ng);
       const et=EXTRA_ETQ[x.cat]||{ic:'💶',n:'Extra en efectivo'};
-      const detalle=x.cat==='deposito'?`${money(x.monto)} reembolsable`:(c?`${money(c)}${x.unidad==='persona_noche'?` · ${money(x.monto)}/pers./noche`:''}`:'ver anuncio');
+      const ut=UNI_TXT[x.unidad]||'';
+      const detalle=x.cat==='deposito'?`${money(x.monto)} reembolsable`:(c?`${money(c)}${ut?` · ${money(x.monto)}${ut}`:''}`:'ver anuncio');
       return `<div class="stextra ${x.cat==='deposito'?'dep':''}"><span>${et.ic} ${et.n}</span><span>${detalle}</span></div>`;
     }).join('');
     const extrasBox=(s.extras&&s.extras.length)?`<div class="stextras">

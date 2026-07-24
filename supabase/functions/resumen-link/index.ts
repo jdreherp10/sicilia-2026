@@ -70,76 +70,115 @@ const num = (s: string | undefined | null): number | null => {
 
 // ---- Tasas / pagos en efectivo escondidos en la descripción ----
 // Muchos caseros de Sicilia cobran la "tassa di soggiorno" y otros extras
-// en efectivo a la llegada, fuera de la plataforma. Los sacamos del texto.
+// (limpieza, ropa de cama, consumos, depósito) en efectivo a la entrega,
+// fuera de la plataforma, y los listan con comas en la descripción.
+// Estrategia: localizar CADA monto en € y clasificarlo por su propio
+// contexto acotado, sin que un cargo invada al vecino.
 type Tasa = { texto: string; monto: number | null; unidad: string | null; cat: string; efectivo: boolean };
 
 const normTxt = (s: string) => s.replace(/\s+/g, " ").trim();
 
-function montoDe(str: string): number | null {
-  const cur = "(?:€|eur(?:os?)?|euro)";
-  const n = "(\\d{1,4}(?:[.,]\\d{1,2})?)";
-  const m = str.match(new RegExp(cur + "\\s*" + n, "i")) || str.match(new RegExp(n + "\\s*" + cur, "i"));
-  if (!m) return null;
-  const v = Number(m[1].replace(/\.(?=\d{3}\b)/g, "").replace(",", "."));
-  return isNaN(v) ? null : v;
+// Categorías en orden de prioridad (la primera que casa gana).
+const CATS: [string, RegExp][] = [
+  ["deposito", /dep[oó]sito|deposito|cauzion\w*|fianza|caparra|security\s+deposit|damage\s+deposit|\bdeposits?\b/i],
+  ["tasa", /impuesto|imposta|tassa|soggiorno|(?:city|tourist|visitor'?s?|accommodation|tourism)\s*tax|tasa\s+(?:tur\w*|de\s+aloj\w*|de\s+estancia)/i],
+  ["limpieza", /limpiez\w*|pulizi\w*|cleaning/i],
+  ["ropa", /s[aá]banas?|ropa\s+de\s+cama|lino|biancheria|lenzuola|linen|bed\s*linen|towels?|toallas?/i],
+  ["consumo", /consumo?s?|utenze|utilities|luz|gas|electric\w*|\bagua\b|water/i],
+];
+function categoriaDe(win: string): string | null {
+  for (const [c, re] of CATS) if (re.test(win)) return c;
+  return null;
 }
 
-function unidadDe(str: string): string {
-  const s = str.toLowerCase();
-  const perPerson = /(per|a|por)\s+person\w*|\/\s*person|p\/?p\b|por\s+persona|a\s+persona/.test(s);
-  const perNight = /(per|a|por)\s+(night|notte|noche)|\/\s*(night|notte|noche)|por\s+noche|a\s+notte|per\s+notte|(?:y|e|and)\s+(noche|notte|night)/.test(s)
-    || (perPerson && /\b(noche|notte|nights?)\b/.test(s));
-  if (perPerson && perNight) return "persona_noche";
-  if (perNight) return "noche";
-  if (perPerson) return "persona";
+// La unidad SIEMPRE sigue al monto ("€150 por semana", "€2 por día por persona").
+function unidadDe(after: string): string {
+  const s = " " + after.toLowerCase() + " ";
+  if (/por\s+d[ií]a\s+por\s+persona|per\s+day\s+per\s+person|per\s+person\s+per\s+(?:night|day)|a\s+persona\s+a\s+notte|por\s+persona\s+(?:y|por|al)\s+(?:noche|d[ií]a)/.test(s)) return "persona_noche";
+  if (/por\s+semana|\/\s*sem\w*|\/se\b|per\s+week|a\s+settimana|semanal/.test(s)) return "semana";
+  if (/por\s+persona|per\s+person|a\s+persona|p\/?p\b|x\s+persona/.test(s)) return "persona";
+  if (/por\s+(?:noche|d[ií]a)|per\s+(?:night|day)|a\s+notte/.test(s)) return "noche";
   return "estancia";
 }
 
-function categoriaDe(s: string): string {
-  if (/cauzion\w*|deposito?\s+cauzional\w*|security\s+deposit|fianza|dep[oó]sito\s+reembols\w*|caparra/i.test(s)) return "deposito";
-  if (/tassa|imposta|soggiorno|city\s*tax|tourist\s*tax|visitor'?s?\s*tax|tasa\s+tur|impuesto\s+tur|tasa\s+de\s+alojam/i.test(s)) return "tasa";
-  if (/pulizi\w*|cleaning|limpiez\w*/i.test(s)) return "limpieza";
-  return "efectivo";
-}
+const CASH_RE = /efectivo|contanti|cash/i;
+const numGlobal = /(?:€|eur(?:os?)?)\s*(\d{1,4}(?:[.,]\d{1,2})?)|(\d{1,4}(?:[.,]\d{1,2})?)\s*(?:€|eur(?:os?)?|euros?)/gi;
+const aNum = (s: string): number | null => {
+  const n = Number(String(s).replace(/\.(?=\d{3}\b)/g, "").replace(",", "."));
+  return isNaN(n) ? null : n;
+};
 
 function detectarTasas(texto: string): Tasa[] {
   if (!texto) return [];
-  const frases = normTxt(texto).split(/(?<=[.!?])\s+|(?:\s*[•·\-–]\s+)|\n+/);
-  const KEY = /(tassa|imposta)\s+di\s+soggiorno|city\s*tax|tourist\s*tax|visitor'?s?\s*tax|tasa\s+(tur[ií]stica|de\s+alojamiento)|impuesto\s+(tur[ií]stico|de\s+estancia)|soggiorno|in\s+contanti|en\s+efectivo|in\s+cash|paid?\s+in\s+cash|contanti|pago\s+en\s+efectivo|cash\s+(?:to|al|payment|on)|cauzion\w*|security\s+deposit|fianza|caparra/i;
-  const CASH = /contanti|efectivo|cash/i;
-  const out: Tasa[] = [];
-  const vistos = new Set<string>();
-  for (const f of frases) {
-    if (!KEY.test(f)) continue;
-    const texto = normTxt(f).slice(0, 200);
-    if (vistos.has(texto)) continue;
-    vistos.add(texto);
-    const monto = montoDe(f);
-    out.push({ texto, monto, unidad: monto ? unidadDe(f) : null, cat: categoriaDe(f), efectivo: CASH.test(f) });
-    if (out.length >= 6) break;
+  const t = normTxt(texto);
+  const cashContext = CASH_RE.test(t);
+  // 1) posiciones de todos los montos (para acotar la ventana entre vecinos)
+  const montos: { p: number; end: number; raw: string; val: number | null }[] = [];
+  let mm: RegExpExecArray | null;
+  numGlobal.lastIndex = 0;
+  while ((mm = numGlobal.exec(t)) !== null) {
+    montos.push({ p: mm.index, end: mm.index + mm[0].length, raw: mm[0], val: aNum(mm[1] || mm[2]) });
+    if (montos.length > 60) break;
   }
-  return out;
+  const items: Tasa[] = [];
+  for (let k = 0; k < montos.length; k++) {
+    const cur = montos[k];
+    if (cur.val == null) continue;
+    const prevEnd = k > 0 ? montos[k - 1].end : 0;
+    const nextStart = k < montos.length - 1 ? montos[k + 1].p : t.length;
+    // BEFORE: desde el monto anterior o el último separador fuerte (. ; • salto). El ":" NO corta (etiqueta antes del valor).
+    const bslice = t.slice(Math.max(prevEnd, cur.p - 60), cur.p);
+    const sepB = Math.max(bslice.lastIndexOf(". "), bslice.lastIndexOf(";"), bslice.lastIndexOf("•"), bslice.lastIndexOf("\n"));
+    const before = sepB >= 0 ? bslice.slice(sepB + 1) : bslice;
+    // AFTER: hasta el próximo monto o el próximo separador (, . ; : • salto)
+    const aslice = t.slice(cur.end, Math.min(nextStart, cur.end + 30));
+    const sepA = aslice.search(/[,.;:•\n]/);
+    const after = sepA >= 0 ? aslice.slice(0, sepA) : aslice;
+    const cat = categoriaDe(before) || categoriaDe(after);
+    if (!cat && !CASH_RE.test(before + after) && !cashContext) continue; // sin categoría ni contexto efectivo → ignorar
+    items.push({
+      texto: normTxt(before + " " + cur.raw + " " + after).slice(0, 160),
+      monto: cur.val,
+      unidad: unidadDe(after),
+      cat: cat || "efectivo",
+      efectivo: CASH_RE.test(before + after) || cashContext,
+    });
+  }
+  // 2) dedup por categoría: preferir la unidad más específica (el texto se repite entre bloques)
+  const espec: Record<string, number> = { persona_noche: 5, semana: 4, persona: 3, noche: 2, estancia: 1 };
+  const byCat: Record<string, Tasa> = {};
+  for (const it of items) {
+    const prev = byCat[it.cat];
+    if (!prev || (espec[it.unidad || ""] || 0) > (espec[prev.unidad || ""] || 0)) byCat[it.cat] = it;
+  }
+  return Object.values(byCat).slice(0, 8);
 }
 
-// Extrae el texto completo de la descripción del bootstrap de Airbnb.
+// Extrae y limpia el texto completo de la descripción del bootstrap de Airbnb.
 function descripcionAirbnb(html: string): string {
   const partes: string[] = [];
-  // htmlDescription.htmlText (descripción principal)
   const i = html.indexOf('"htmlDescription"');
   if (i >= 0) {
     const m = html.slice(i, i + 8000).match(/"htmlText":"((?:[^"\\]|\\.)*)"/);
     if (m) partes.push(m[1]);
   }
-  // Otros bloques de texto (reglas de la casa, notas del anfitrión) suelen traer las tasas
+  // Otros bloques (reglas de la casa, notas del anfitrión) suelen traer las tasas
   const re = /"localizedStringWithTranslationPreference":"((?:[^"\\]|\\.)*)"/g;
   let mm: RegExpExecArray | null;
   let n = 0;
   while ((mm = re.exec(html)) !== null && n < 8) { partes.push(mm[1]); n++; }
-  let t = partes.join("\n");
-  // desescapar y quitar etiquetas
-  t = t.replace(/\\u003c[^\\]*?\\u003e/g, " ").replace(/\\n/g, "\n").replace(/\\t/g, " ")
-       .replace(/\\"/g, '"').replace(/\\\//g, "/").replace(/\\u0026/g, "&")
-       .replace(/<[^>]+>/g, " ");
+  return partes.map(limpiarBloque).join("\n");
+}
+
+// Desescapa un valor de string JSON (\\uXXXX, \\n, \\", \\/) y quita etiquetas HTML.
+function limpiarBloque(s: string): string {
+  let t: string;
+  try { t = JSON.parse('"' + s.replace(/\n/g, "\\n") + '"'); }
+  catch {
+    t = s.replace(/\\u003c/gi, "<").replace(/\\u003e/gi, ">").replace(/\\u0026/gi, "&")
+         .replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\//g, "/");
+  }
+  t = t.replace(/<[^>]+>/g, " ");
   return decode(t);
 }
 
