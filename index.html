@@ -198,6 +198,12 @@
   .stextra.dep{color:var(--muted)}
   .stextra span:last-child{white-space:nowrap;font-weight:700}
   .stextranote{font-size:10px;color:var(--muted);line-height:1.4;margin-top:5px}
+  /* Casa reservada */
+  .stcard.reserved{border-color:#4ade80;box-shadow:0 0 0 1px rgba(74,222,128,.25);background:rgba(74,222,128,.06)}
+  .resban{display:inline-block;font-size:10px;font-weight:800;color:#08111f;background:#4ade80;border-radius:6px;padding:3px 8px;margin-bottom:9px;letter-spacing:.03em}
+  .stinvite{display:block;text-align:center;font-size:12.5px;font-weight:800;color:#08111f;background:#4ade80;border-radius:9px;padding:9px 12px;text-decoration:none;margin-bottom:10px}
+  .stinvite:hover{background:#6ee79b}
+  .stnoprice{font-size:11.5px;color:var(--muted);line-height:1.45;margin-bottom:9px}
 </style>
 </head>
 <body>
@@ -388,6 +394,27 @@ let fFor=new Set(PEOPLE.map(p=>p.id));
 function saveG(){try{localStorage.setItem(GKEY,JSON.stringify(expenses));}catch(e){}}
 const unitById=id=>UNITS.find(u=>u.id===id);
 function money(n){const v=Math.round(n*100)/100;return '€'+v.toFixed(2);}
+/* ---- USD (solo pestaña Casas) ----
+   Los gastos del viaje (pestaña 💶) van en € porque se pagan en euros en Sicilia.
+   En Casas el precio base lo teclea Johan en USD (lo que le muestra Airbnb) y los
+   extras/tasas vienen en € del anuncio → se convierten con FX (cambio EUR→USD en vivo). */
+let FX=Number(localStorage.getItem('sicilia_fx'))||1.14; /* EUR→USD; respaldo 1.14 si no hay red */
+let FXsrc=localStorage.getItem('sicilia_fx')?'guardado':'aprox.';
+const usd=n=>{const v=Math.round(n*100)/100;return '$'+v.toFixed(2);};
+const eur2usd=e=>e*FX; /* convierte un monto en € a USD */
+async function loadFX(){
+  const fuentes=[
+    ['https://api.frankfurter.dev/v1/latest?base=EUR&symbols=USD',d=>d&&d.rates&&d.rates.USD],
+    ['https://open.er-api.com/v6/latest/EUR',d=>d&&d.rates&&d.rates.USD],
+  ];
+  for(const [u,pick] of fuentes){
+    try{
+      const r=await fetch(u); if(!r.ok) continue;
+      const v=pick(await r.json());
+      if(v&&v>0.5&&v<2){ FX=v; FXsrc='en vivo'; try{localStorage.setItem('sicilia_fx',String(v));}catch(e){} if(typeof view!=='undefined'&&view==='stay')renderPanel(); return; }
+    }catch(e){}
+  }
+}
 /* Peso de consumo por persona según tipo de gasto. Solo Elina varía: ¼ en hospedaje, completo en el resto. */
 function cw(pid,cat){return (pid==='elina'&&cat==='hospedaje')?0.25:1;}
 function computeG(){
@@ -506,14 +533,16 @@ function extraCost(x,ng){
 }
 function extrasTotal(s,ng){return (s.extras||[]).reduce((t,x)=>t+extraCost(x,ng),0);}
 function depositosTotal(s){return (s.extras||[]).filter(x=>x.cat==='deposito'&&x.monto!=null).reduce((t,x)=>t+Number(x.monto||0),0);}
-function stayMetrics(s){const ng=nightsOf(s.base);const extra=extrasTotal(s,ng);const total=(s.price||0)+extra;const perNight=total/ng;return{ng,extra,total,perNight,perPP:perNight/STAYHEADS};}
+/* Métricas en USD: el precio base ya está en USD; los extras (en €) se convierten con FX. */
+function stayMetrics(s){const ng=nightsOf(s.base);const extra=eur2usd(extrasTotal(s,ng));const total=(s.price||0)+extra;const perNight=total/ng;return{ng,extra,total,perNight,perPP:perNight/STAYHEADS};}
 function renderStays(){
   const pills=ORDER.map(id=>{const n=stays.filter(s=>s.base===id).length;return `<div class="pill ${id===sBase?'on':''}" data-sbase="${id}"><span class="pd" style="background:${BASES[id].color}"></span>${BASES[id].name}${n?` · ${n}`:''}</div>`;}).join('');
   const b=BASES[sBase],sc=sched[sBase];
   const list=stays.filter(s=>s.base===sBase);
   let bestId=null,bestPP=Infinity;
-  list.forEach(s=>{const {perPP}=stayMetrics(s);if((s.cap==null||s.cap>=8)&&perPP<bestPP){bestPP=perPP;bestId=s.id;}});
-  const sorted=list.slice().sort((a,c)=>stayMetrics(a).perPP-stayMetrics(c).perPP);
+  list.forEach(s=>{if(s.reservada)return;const {perPP}=stayMetrics(s);if((s.cap==null||s.cap>=8)&&perPP<bestPP){bestPP=perPP;bestId=s.id;}});
+  /* reservadas primero; el resto por precio/persona */
+  const sorted=list.slice().sort((a,c)=>(c.reservada?1:0)-(a.reservada?1:0)||stayMetrics(a).perPP-stayMetrics(c).perPP);
   const cards=sorted.map(s=>{
     const {ng,extra,total,perNight,perPP}=stayMetrics(s);
     const capBad=s.cap!=null&&s.cap<8;
@@ -528,32 +557,34 @@ function renderStays(){
       const c=extraCost(x,ng);
       const et=EXTRA_ETQ[x.cat]||{ic:'💶',n:'Extra en efectivo'};
       const ut=UNI_TXT[x.unidad]||'';
-      const detalle=x.cat==='deposito'?`${money(x.monto)} reembolsable`:(c?`${money(c)}${ut?` · ${money(x.monto)}${ut}`:''}`:'ver anuncio');
+      const detalle=x.cat==='deposito'?`${usd(eur2usd(x.monto))} reembolsable`:(c?`${usd(eur2usd(c))}${ut?` · ${usd(eur2usd(x.monto))}${ut}`:''}`:'ver anuncio');
       return `<div class="stextra ${x.cat==='deposito'?'dep':''}"><span>${et.ic} ${et.n}</span><span>${detalle}</span></div>`;
     }).join('');
     const extrasBox=(s.extras&&s.extras.length)?`<div class="stextras">
-        ${extra?`<div class="stextra tot"><span>💶 Extras en efectivo${dep?' (sin depósito)':''}</span><span>+ ${money(extra)}</span></div>`:''}
+        ${extra?`<div class="stextra tot"><span>💶 Extras en efectivo${dep?' (sin depósito)':''}</span><span>+ ${usd(extra)}</span></div>`:''}
         ${extrasRows}
-        <div class="stextranote">Estimado para ${TAXHEADS} personas × ${ng} noches. Los niños suelen estar exentos de la tasa: ajústalo si aplica.</div>
+        <div class="stextranote">Extras en € del anuncio, convertidos a USD (1 € = ${usd(FX)}). Estimado para ${TAXHEADS} personas × ${ng} noches; los niños suelen estar exentos de la tasa.</div>
       </div>`:'';
-    return `<div class="stcard ${s.id===bestId?'best':''}">
+    return `<div class="stcard ${s.reservada?'reserved':(s.id===bestId?'best':'')}">
       <button class="stdel" data-sdel="${s.id}" aria-label="Eliminar">×</button>
+      ${s.reservada?'<div class="resban">✅ RESERVADA</div>':''}
       ${s.foto?`<img class="stthumb" src="${s.foto}" alt="" loading="lazy" onerror="this.style.display='none'">`:''}
-      <div class="sttop"><div class="stname">${s.name||'(sin nombre)'}${s.id===bestId?'<span class="stbadge">⭐ MEJOR PRECIO</span>':''}</div>${s.rating?`<span class="strate">★ ${s.rating}</span>`:''}</div>
-      <div class="stmetrics">
-        <div class="stmetric hero"><div class="mv">${money(perPP)}</div><div class="ml">noche / pers.</div></div>
-        <div class="stmetric"><div class="mv">${money(perNight)}</div><div class="ml">por noche</div></div>
-        <div class="stmetric"><div class="mv">${money(total)}</div><div class="ml">total${extra?' c/extras':''} · ${ng} N</div></div>
-      </div>
+      <div class="sttop"><div class="stname">${s.name||'(sin nombre)'}${(!s.reservada&&s.id===bestId)?'<span class="stbadge">⭐ MEJOR PRECIO</span>':''}</div>${s.rating?`<span class="strate">★ ${s.rating}</span>`:''}</div>
+      ${s.invite?`<a class="stinvite" href="${s.invite}" target="_blank" rel="noopener">🔗 Ver reserva · invitar a la familia ↗</a>`:''}
+      ${s.price?`<div class="stmetrics">
+        <div class="stmetric hero"><div class="mv">${usd(perPP)}</div><div class="ml">noche / pers.</div></div>
+        <div class="stmetric"><div class="mv">${usd(perNight)}</div><div class="ml">por noche</div></div>
+        <div class="stmetric"><div class="mv">${usd(total)}</div><div class="ml">total${extra?' c/extras':''} · ${ng} N</div></div>
+      </div>`:(s.reservada?'<div class="stnoprice">Reserva confirmada. Añade el precio y el link del anuncio cuando quieras verlo aquí.</div>':'')}
       ${extrasBox}
       <div class="stspecs">${specs.join('')}</div>
       ${s.notes?`<div class="stnotes">${s.notes}</div>`:''}
       ${s.url?`<a class="stlink" href="${s.url}" target="_blank" rel="noopener">Ver anuncio ↗</a>`:''}
     </div>`;
   }).join('');
-  const summary=list.length?`${list.length} opción${list.length>1?'es':''} · mejor precio ${bestId?money(bestPP)+' /noche/pers.':'—'}`:'Sin opciones todavía';
+  const summary=list.length?`${list.length} opción${list.length>1?'es':''} · mejor precio ${bestId?usd(bestPP)+' /noche/pers.':'—'}`:'Sin opciones todavía';
   const parkChips=`<div class="gchip paychip ${sParking?'on':''}" style="--c:#4ade80" data-park="1">🚗 Con parqueo</div><div class="gchip paychip ${!sParking?'on':''}" style="--c:#fb7185" data-park="0">🚫 Sin parqueo</div>`;
-  return `<div class="note luggage" style="margin-bottom:11px"><span class="ic">🏠</span><span>Compara casas por base. La <b>⭐ mejor</b> = menor precio por noche y persona entre las que caben los 8. El precio por persona se reparte entre <b>7,25 puestos</b> (Elina cuenta ¼ en hospedaje).</span></div>
+  return `<div class="note luggage" style="margin-bottom:11px"><span class="ic">🏠</span><span>Compara casas por base, <b>en USD</b>. La <b>⭐ mejor</b> = menor precio por noche y persona entre las que caben los 8. El precio por persona se reparte entre <b>7,25 puestos</b> (Elina cuenta ¼ en hospedaje). Cambio <b>1 € = ${usd(FX)}</b> (${FXsrc}).</span></div>
     <div class="pills">${pills}</div>
     <div class="ddhd"><div><div class="ddt" style="color:${b.color}">${b.name}</div><div class="ddb">entra ${sc.from} oct · sale ${sc.to+1} oct · ${sc.n} noches</div></div></div>
     <div class="staysum">${summary}</div>
@@ -564,7 +595,7 @@ function renderStays(){
         <div class="urlrow"><input type="text" id="sUrl" inputmode="url" placeholder="https://…"><button class="sfill" id="sFillBtn" type="button">✨ Rellenar</button></div>
         <div class="sfillmsg" id="sFillMsg"></div>
       </div>
-      <div><label>Precio total de la estancia (${nightsOf(sBase)} noches, €)</label><input type="text" id="sPrice" inputmode="decimal" placeholder="0,00"></div>
+      <div><label>Precio total de la estancia en USD (${nightsOf(sBase)} noches) — lo que te muestra Airbnb</label><input type="text" id="sPrice" inputmode="decimal" placeholder="0.00"></div>
       <div class="chrow">
         <div style="flex:1;min-width:74px"><label>Habitac.</label><input type="text" id="sRooms" inputmode="numeric" placeholder="4"></div>
         <div style="flex:1;min-width:74px"><label>Baños</label><input type="text" id="sBaths" inputmode="numeric" placeholder="2"></div>
@@ -589,10 +620,12 @@ function bindStays(){
   if(add)add.onclick=()=>{
     const name=document.getElementById('sName').value.trim();
     const url=document.getElementById('sUrl').value.trim();
-    let raw=document.getElementById('sPrice').value.trim();
-    if(raw.indexOf(',')>=0) raw=raw.replace(/\./g,'').replace(',','.');
+    /* precio en USD: acepta "1350", "1350.50" y "1,350.50"/"1.350,50" (el último separador es el decimal) */
+    let raw=document.getElementById('sPrice').value.trim().replace(/[^\d.,]/g,'');
+    const lc=Math.max(raw.lastIndexOf(','),raw.lastIndexOf('.'));
+    if(lc>=0){raw=raw.slice(0,lc).replace(/[.,]/g,'')+'.'+raw.slice(lc+1).replace(/[.,]/g,'');}
     const price=parseFloat(raw);
-    if(!price||price<=0){alert('Pon un precio total válido.');return;}
+    if(!price||price<=0){alert('Pon un precio total válido (en USD).');return;}
     const st={id:'s'+Date.now()+Math.floor(Math.random()*1000),base:sBase,name,url,price,rooms:numOr('sRooms'),baths:numOr('sBaths'),cap:numOr('sCap'),parking:sParking,rating:numOr('sRate'),notes:document.getElementById('sNotes').value.trim(),foto:sFoto,extras:sExtras.slice()};
     stays.push(st);sFoto=null;sExtras=[];saveS();renderPanel();body.scrollTop=0;sbIns('alojamientos',sToRow(st));
   };
@@ -639,8 +672,8 @@ function bindStays(){
       const costo=sExtras.reduce((t,x)=>t+extraCost(x,ng),0);
       const dep=sExtras.filter(x=>x.cat==='deposito'&&x.monto!=null).reduce((t,x)=>t+Number(x.monto||0),0);
       const partes=[];
-      if(costo)partes.push(`~${money(costo)} en tasas/efectivo (para ${TAXHEADS} pers. × ${ng} noches)`);
-      if(dep)partes.push(`depósito ${money(dep)} reembolsable`);
+      if(costo)partes.push(`~${usd(eur2usd(costo))} en tasas/efectivo (para ${TAXHEADS} pers. × ${ng} noches)`);
+      if(dep)partes.push(`depósito ${usd(eur2usd(dep))} reembolsable`);
       tasaMsg=` 💶 Detecté ${partes.join(' + ')||'posibles pagos en efectivo'}: se suman al total al guardar (revísalos en el anuncio).`;
     }
     const capMala=d.capacidad!=null&&d.capacidad<8;
@@ -663,8 +696,8 @@ const numN=v=>(v===null||v===undefined||v==='')?null:Number(v);
 const gToRow=e=>({id:e.id,fecha:e.date,descripcion:e.desc||'',monto:e.amount,pago:e.paidBy,tipo:e.cat||'normal',para:(e.forWhom&&e.forWhom.length)?e.forWhom:[]});
 const gFromRow=r=>({id:r.id,date:r.fecha,desc:r.descripcion||'',amount:Number(r.monto),paidBy:r.pago,cat:r.tipo||'normal',forWhom:Array.isArray(r.para)?r.para:[]});
 /* casa <-> fila tabla alojamientos */
-const sToRow=s=>({id:s.id,base:s.base,nombre:s.name||'',url:s.url||'',precio:s.price,habitaciones:numN(s.rooms),banos:numN(s.baths),capacidad:numN(s.cap),parqueo:!!s.parking,rating:numN(s.rating),notas:s.notes||'',foto:s.foto||null,extras:Array.isArray(s.extras)?s.extras:[]});
-const sFromRow=r=>({id:r.id,base:r.base,name:r.nombre||'',url:r.url||'',price:Number(r.precio),rooms:numN(r.habitaciones),baths:numN(r.banos),cap:numN(r.capacidad),parking:r.parqueo!==false,rating:numN(r.rating),notes:r.notas||'',foto:r.foto||null,extras:Array.isArray(r.extras)?r.extras:[]});
+const sToRow=s=>({id:s.id,base:s.base,nombre:s.name||'',url:s.url||'',precio:s.price,habitaciones:numN(s.rooms),banos:numN(s.baths),capacidad:numN(s.cap),parqueo:!!s.parking,rating:numN(s.rating),notas:s.notes||'',foto:s.foto||null,extras:Array.isArray(s.extras)?s.extras:[],reservada:!!s.reservada,invite:s.invite||null});
+const sFromRow=r=>({id:r.id,base:r.base,name:r.nombre||'',url:r.url||'',price:Number(r.precio),rooms:numN(r.habitaciones),baths:numN(r.banos),cap:numN(r.capacidad),parking:r.parqueo!==false,rating:numN(r.rating),notes:r.notas||'',foto:r.foto||null,extras:Array.isArray(r.extras)?r.extras:[],reservada:!!r.reservada,invite:r.invite||null});
 let sbReady=false;
 async function sbLoad(){
   if(!sb) return;
@@ -852,7 +885,7 @@ window.addEventListener('resize',()=>map.invalidateSize());
 drawMap();renderPanel();
 map.fitBounds(L.latLngBounds(Object.values(POI).map(p=>[p.lat,p.lng])).pad(0.12));
 setTimeout(()=>map.invalidateSize(),200);
-sbSubscribe();sbLoad();
+sbSubscribe();sbLoad();loadFX();
 </script>
 </body>
 </html>
