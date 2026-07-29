@@ -20,8 +20,9 @@
   .stats{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}
   .stat{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:5px 9px;font-size:11.5px;color:var(--muted)}
   .stat b{color:var(--txt);font-weight:700}
-  .seg{display:flex;gap:4px;margin-top:13px;background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:4px}
-  .seg button{flex:1;border:0;background:transparent;color:var(--muted);font-size:13px;font-weight:600;padding:9px 6px;border-radius:8px;cursor:pointer;transition:.18s;font-family:inherit}
+  .seg{display:flex;gap:4px;margin-top:13px;background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .seg::-webkit-scrollbar{display:none}
+  .seg button{flex:1 0 auto;min-width:max-content;white-space:nowrap;border:0;background:transparent;color:var(--muted);font-size:12.5px;font-weight:600;padding:9px 8px;border-radius:8px;cursor:pointer;transition:.18s;font-family:inherit}
   .seg button.on{background:linear-gradient(135deg,var(--accent),#0ea5e9);color:#06263b;box-shadow:0 2px 10px rgba(56,189,248,.35)}
   #panelBody{overflow-y:auto;flex:1;padding:14px 14px calc(24px + var(--safe-b))}
 
@@ -204,6 +205,25 @@
   .stinvite{display:block;text-align:center;font-size:12.5px;font-weight:800;color:#08111f;background:#4ade80;border-radius:9px;padding:9px 12px;text-decoration:none;margin-bottom:10px}
   .stinvite:hover{background:#6ee79b}
   .stnoprice{font-size:11.5px;color:var(--muted);line-height:1.45;margin-bottom:9px}
+  /* Elegir casa para el presupuesto */
+  .stchoose{width:100%;margin-top:9px;border:1px solid var(--line);background:var(--bg);color:var(--muted);font-weight:700;font-size:12.5px;padding:9px;border-radius:9px;cursor:pointer;font-family:inherit;transition:.15s}
+  .stchoose:hover{border-color:rgba(56,189,248,.4)}
+  .stchoose.on{background:rgba(56,189,248,.12);border-color:rgba(56,189,248,.5);color:#9fd0ff}
+  .stbudget{display:inline-block;font-size:9.5px;font-weight:800;color:#06263b;background:var(--accent);border-radius:6px;padding:2px 7px;margin-left:6px;vertical-align:middle;letter-spacing:.02em}
+  /* Reporte de presupuesto de hospedaje */
+  .rcard{background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:12px;padding:11px 13px;margin-bottom:10px}
+  .rcard.pend{border-left-color:#e9b949}
+  .rhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}
+  .rname{font-size:14px;font-weight:800}
+  .rmeta{font-size:11px;color:var(--muted);text-align:right;flex:none}
+  .rsplit{display:flex;gap:7px;margin-top:9px}
+  .rsp{flex:1;background:var(--bg);border:1px solid var(--line);border-top:2px solid var(--c);border-radius:9px;padding:7px 5px;text-align:center}
+  .rsp .rspn{font-size:10px;color:var(--muted);font-weight:700}
+  .rsp .rspv{font-size:13.5px;font-weight:800;margin-top:3px}
+  .rpend{font-size:12px;color:#f0dca6;margin:6px 0 9px;line-height:1.45}
+  .rgoto{width:100%;border:1px solid var(--line);background:var(--bg);color:var(--accent);font-weight:700;font-size:12.5px;padding:8px;border-radius:9px;cursor:pointer;font-family:inherit}
+  .rgoto:hover{border-color:rgba(56,189,248,.4)}
+  .rfoot{font-size:11px;color:var(--muted);line-height:1.5;margin:4px 2px 10px}
 </style>
 </head>
 <body>
@@ -220,7 +240,8 @@
         <button data-view="agenda" class="on">📅 Agenda</button>
         <button data-view="map">🗺️ Bases</button>
         <button data-view="stay">🏠 Casas</button>
-        <button data-view="gastos">💶 Gastos</button></div>
+        <button data-view="gastos">💶 Gastos</button>
+        <button data-view="presupuesto">📊 Hospedaje</button></div>
     </div>
     <div id="panelBody"></div>
   </aside>
@@ -535,10 +556,15 @@ function extrasTotal(s,ng){return (s.extras||[]).reduce((t,x)=>t+extraCost(x,ng)
 function depositosTotal(s){return (s.extras||[]).filter(x=>x.cat==='deposito'&&x.monto!=null).reduce((t,x)=>t+Number(x.monto||0),0);}
 /* Métricas en USD: el precio base ya está en USD; los extras (en €) se convierten con FX. */
 function stayMetrics(s){const ng=nightsOf(s.base);const extra=eur2usd(extrasTotal(s,ng));const total=(s.price||0)+extra;const perNight=total/ng;return{ng,extra,total,perNight,perPP:perNight/STAYHEADS};}
+/* Puestos ponderados por núcleo para hospedaje (A 3.25 / B 2.5 / K 1.5 = 7.25). Mismo reparto que un gasto de hospedaje en la pestaña 💶. */
+function hospHeads(){const h={};UNITS.forEach(u=>h[u.id]=0);PEOPLE.forEach(p=>{const w=cw(p.id,'hospedaje');for(const u in p.w)h[u]=(h[u]||0)+w*p.w[u];});return h;}
+/* Casa que cuenta para el presupuesto de una base: la marcada como elegida; si no hay, la reservada. */
+function chosenFor(base){const l=stays.filter(s=>s.base===base);return l.find(s=>s.elegida)||l.find(s=>s.reservada)||null;}
 function renderStays(){
   const pills=ORDER.map(id=>{const n=stays.filter(s=>s.base===id).length;return `<div class="pill ${id===sBase?'on':''}" data-sbase="${id}"><span class="pd" style="background:${BASES[id].color}"></span>${BASES[id].name}${n?` · ${n}`:''}</div>`;}).join('');
   const b=BASES[sBase],sc=sched[sBase];
   const list=stays.filter(s=>s.base===sBase);
+  const chosenId=(chosenFor(sBase)||{}).id;
   let bestId=null,bestPP=Infinity;
   list.forEach(s=>{if(s.reservada)return;const {perPP}=stayMetrics(s);if((s.cap==null||s.cap>=8)&&perPP<bestPP){bestPP=perPP;bestId=s.id;}});
   /* reservadas primero; el resto por precio/persona */
@@ -569,7 +595,7 @@ function renderStays(){
       <button class="stdel" data-sdel="${s.id}" aria-label="Eliminar">×</button>
       ${s.reservada?'<div class="resban">✅ RESERVADA</div>':''}
       ${s.foto?`<img class="stthumb" src="${s.foto}" alt="" loading="lazy" onerror="this.style.display='none'">`:''}
-      <div class="sttop"><div class="stname">${s.name||'(sin nombre)'}${(!s.reservada&&s.id===bestId)?'<span class="stbadge">⭐ MEJOR PRECIO</span>':''}</div>${s.rating?`<span class="strate">★ ${s.rating}</span>`:''}</div>
+      <div class="sttop"><div class="stname">${s.name||'(sin nombre)'}${(!s.reservada&&s.id===bestId)?'<span class="stbadge">⭐ MEJOR PRECIO</span>':''}${s.id===chosenId?'<span class="stbudget">📊 EN PRESUPUESTO</span>':''}</div>${s.rating?`<span class="strate">★ ${s.rating}</span>`:''}</div>
       ${s.invite?`<a class="stinvite" href="${s.invite}" target="_blank" rel="noopener">🔗 Ver reserva · invitar a la familia ↗</a>`:''}
       ${s.price?`<div class="stmetrics">
         <div class="stmetric hero"><div class="mv">${usd(perPP)}</div><div class="ml">noche / pers.</div></div>
@@ -580,6 +606,7 @@ function renderStays(){
       <div class="stspecs">${specs.join('')}</div>
       ${s.notes?`<div class="stnotes">${s.notes}</div>`:''}
       ${s.url?`<a class="stlink" href="${s.url}" target="_blank" rel="noopener">Ver anuncio ↗</a>`:''}
+      <button class="stchoose ${s.id===chosenId?'on':''}" data-choose="${s.id}">${s.id===chosenId?'📊 ✓ Cuenta en el presupuesto':'📊 Elegir para el presupuesto'}</button>
     </div>`;
   }).join('');
   const summary=list.length?`${list.length} opción${list.length>1?'es':''} · mejor precio ${bestId?usd(bestPP)+' /noche/pers.':'—'}`:'Sin opciones todavía';
@@ -615,6 +642,14 @@ function bindStays(){
   body.querySelectorAll('[data-sbase]').forEach(el=>el.onclick=()=>{sBase=el.dataset.sbase;renderPanel();body.scrollTop=0;});
   body.querySelectorAll('[data-park]').forEach(el=>el.onclick=()=>{sParking=el.dataset.park==='1';body.querySelectorAll('[data-park]').forEach(x=>x.classList.toggle('on',x.dataset.park===(sParking?'1':'0')));});
   body.querySelectorAll('[data-sdel]').forEach(el=>el.onclick=()=>{if(confirm('¿Eliminar esta casa?')){const sid=el.dataset.sdel;stays=stays.filter(s=>s.id!==sid);saveS();renderPanel();sbDel('alojamientos',sid);}});
+  /* Elegir / desmarcar la casa que cuenta en el presupuesto (una por base) */
+  body.querySelectorAll('[data-choose]').forEach(el=>el.onclick=()=>{
+    const sid=el.dataset.choose;const s=stays.find(x=>x.id===sid);if(!s)return;
+    const wasChosen=(chosenFor(s.base)||{}).id===sid;
+    stays.filter(x=>x.base===s.base).forEach(x=>x.elegida=false);
+    if(!wasChosen)s.elegida=true;
+    saveS();renderPanel();sbSetElegida(s.base);
+  });
   const numOr=id=>{const v=(document.getElementById(id).value||'').trim().replace(',','.');const n=parseFloat(v);return isNaN(n)?null:n;};
   const add=document.getElementById('sAddBtn');
   if(add)add.onclick=()=>{
@@ -697,6 +732,63 @@ function bindStays(){
   if(load)load.onclick=()=>{const t=prompt('Pega aquí el respaldo (JSON) de casas:');if(!t)return;try{const arr=JSON.parse(t);if(Array.isArray(arr)){stays=arr;saveS();renderPanel();}else alert('Formato no válido.');}catch(e){alert('No se pudo leer el JSON.');}};
 }
 
+/* ============ Presupuesto de hospedaje (proyección) ============ */
+function renderPresupuesto(){
+  const heads=hospHeads(); /* {A:3.25,B:2.5,K:1.5} */
+  let baseSum=0,extraSum=0,totalSum=0,depSum=0,nChosen=0;
+  const nucleo={};UNITS.forEach(u=>nucleo[u.id]=0);
+  const rowsHtml=ORDER.map(id=>{
+    const b=BASES[id],sc=sched[id],ch=chosenFor(id);
+    if(!ch) return `<div class="rcard pend" style="--c:${b.color}">
+      <div class="rhead"><div class="rname">${b.name}</div><div class="rmeta">${sc.n} noche${sc.n>1?'s':''}</div></div>
+      <div class="rpend">⚠️ Aún no eliges casa para esta base.</div>
+      <button class="rgoto" data-goto="${id}">🏠 Elegir casa en ${b.name} →</button></div>`;
+    if(!(ch.price>0)) return `<div class="rcard pend" style="--c:${b.color}">
+      <div class="rhead"><div class="rname">${b.name}</div><div class="rmeta">${sc.n} noche${sc.n>1?'s':''}</div></div>
+      <div class="rpend">⚠️ Elegiste «${ch.name||'(sin nombre)'}»${ch.reservada&&!ch.elegida?' (reservada)':''} pero falta el precio.</div>
+      <button class="rgoto" data-goto="${id}">🏠 Poner precio en ${b.name} →</button></div>`;
+    const m=stayMetrics(ch);
+    const dep=eur2usd(depositosTotal(ch));
+    const split={};UNITS.forEach(u=>split[u.id]=m.total*heads[u.id]/STAYHEADS);
+    baseSum+=ch.price;extraSum+=m.extra;totalSum+=m.total;depSum+=dep;nChosen++;
+    UNITS.forEach(u=>nucleo[u.id]+=split[u.id]);
+    const extrasRows=(ch.extras||[]).filter(x=>x&&x.cat!=='deposito').map(x=>{
+      const c=extraCost(x,m.ng);if(!c)return '';
+      const et=EXTRA_ETQ[x.cat]||{ic:'💶',n:'Extra en efectivo'};const ut=UNI_TXT[x.unidad]||'';
+      return `<div class="stextra"><span>${et.ic} ${et.n}</span><span>${usd(eur2usd(c))}${ut?` · ${usd(eur2usd(x.monto))}${ut}`:''}</span></div>`;
+    }).join('');
+    const splitHtml=UNITS.map(u=>`<div class="rsp" style="--c:${u.color}"><div class="rspn">${u.short}</div><div class="rspv">${usd(split[u.id])}</div></div>`).join('');
+    return `<div class="rcard" style="--c:${b.color}">
+      <div class="rhead"><div class="rname">${b.name}${ch.reservada?' ✅':''}</div><div class="rmeta">${sc.n} noche${sc.n>1?'s':''}<br>${ch.name||'(sin nombre)'}</div></div>
+      <div class="stextras">
+        <div class="stextra"><span>🏠 Reserva (Airbnb)</span><span>${usd(ch.price)}</span></div>
+        ${extrasRows}
+        <div class="stextra tot"><span>Total de la base</span><span>${usd(m.total)}</span></div>
+        ${dep?`<div class="stextra dep"><span>🔐 Depósito reembolsable (aparte)</span><span>${usd(dep)}</span></div>`:''}
+      </div>
+      <div class="rsplit">${splitHtml}</div></div>`;
+  }).join('');
+  const ncards=UNITS.map(u=>`<div class="ucard" style="--c:${u.color}"><div class="uname">${u.name}</div>
+    <div class="ubal" style="color:#cfe3f5">${usd(nucleo[u.id])}</div><div class="ulbl">le toca en hospedaje</div>
+    <div class="upaid">${heads[u.id]} de ${STAYHEADS} puestos${u.id==='A'?' · Elina ¼':''}</div></div>`).join('');
+  const totalBox=`<div class="settlebox"><div class="st">Total hospedaje · ${nChosen} de ${ORDER.length} bases elegidas</div>
+    <div class="settle">Reservas (Airbnb, USD)<span>${usd(baseSum)}</span></div>
+    ${extraSum?`<div class="settle">Tasas/efectivo (€→USD)<span>${usd(extraSum)}</span></div>`:''}
+    <div class="settle ok">Total a repartir<span>${usd(totalSum)}</span></div>
+    ${depSum?`<div class="settle" style="color:var(--muted)">Depósitos reembolsables (no se reparten)<span>${usd(depSum)}</span></div>`:''}</div>`;
+  const note=`<div class="note luggage" style="margin-bottom:11px"><span class="ic">📊</span><span>Proyección del gasto en <b>hospedaje</b> con la casa <b>elegida</b> por base (la que reservaste o vas a reservar), <b>en USD</b>. Reparto por los mismos <b>7,25 puestos</b> que la pestaña 💶 (Elina ¼; Pili y Pilo repartidas). Reserva en USD; tasas/efectivo en € del anuncio convertidas (1 € = ${usd(FX)}). Es una <b>estimación</b> aparte: <b>no</b> toca los gastos reales de 💶.</span></div>`;
+  const foot=`<div class="rfoot">Para cambiar una casa, ve a <b>🏠 Casas</b> y toca «📊 Elegir para el presupuesto» en la que quieras. Solo cuenta una por base. Los depósitos se muestran aparte porque se devuelven.</div>`;
+  return note+`<div class="gsummary">${ncards}</div>`+totalBox+`<div class="sectionlbl">Desglose por base</div>`+rowsHtml+foot;
+}
+function bindPresupuesto(){
+  const body=document.getElementById('panelBody');
+  body.querySelectorAll('[data-goto]').forEach(el=>el.onclick=()=>{
+    sBase=el.dataset.goto;view='stay';
+    document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.view==='stay'));
+    renderPanel();body.scrollTop=0;
+  });
+}
+
 /* ============ Supabase (sync en vivo gastos + casas) ============ */
 const SB_URL='https://akfjdwchexpajgqaccca.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFrZmpkd2NoZXhwYWpncWFjY2NhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzMzcwNDUsImV4cCI6MjA5ODkxMzA0NX0.hoqd2hc1dN0U__UEKrF0VfXhtTlyuePMjWZOFXR8wyM';
@@ -708,7 +800,9 @@ const gToRow=e=>({id:e.id,fecha:e.date,descripcion:e.desc||'',monto:e.amount,pag
 const gFromRow=r=>({id:r.id,date:r.fecha,desc:r.descripcion||'',amount:Number(r.monto),paidBy:r.pago,cat:r.tipo||'normal',forWhom:Array.isArray(r.para)?r.para:[]});
 /* casa <-> fila tabla alojamientos */
 const sToRow=s=>({id:s.id,base:s.base,nombre:s.name||'',url:s.url||'',precio:s.price,habitaciones:numN(s.rooms),banos:numN(s.baths),capacidad:numN(s.cap),parqueo:!!s.parking,rating:numN(s.rating),notas:s.notes||'',foto:s.foto||null,extras:Array.isArray(s.extras)?s.extras:[],reservada:!!s.reservada,invite:s.invite||null});
-const sFromRow=r=>({id:r.id,base:r.base,name:r.nombre||'',url:r.url||'',price:Number(r.precio),rooms:numN(r.habitaciones),baths:numN(r.banos),cap:numN(r.capacidad),parking:r.parqueo!==false,rating:numN(r.rating),notes:r.notas||'',foto:r.foto||null,extras:Array.isArray(r.extras)?r.extras:[],reservada:!!r.reservada,invite:r.invite||null});
+const sFromRow=r=>({id:r.id,base:r.base,name:r.nombre||'',url:r.url||'',price:Number(r.precio),rooms:numN(r.habitaciones),baths:numN(r.banos),cap:numN(r.capacidad),parking:r.parqueo!==false,rating:numN(r.rating),notes:r.notas||'',foto:r.foto||null,extras:Array.isArray(r.extras)?r.extras:[],reservada:!!r.reservada,invite:r.invite||null,elegida:!!r.elegida});
+/* Mapea filas de alojamientos conservando `elegida` local si la columna aún no existe en la nube (antes de correr la migración 0005). */
+function mapStayRows(data){const prev={};stays.forEach(s=>prev[s.id]=!!s.elegida);return data.map(r=>{const s=sFromRow(r);if(!('elegida' in r)&&(r.id in prev))s.elegida=prev[r.id];return s;});}
 let sbReady=false;
 async function sbLoad(){
   if(!sb) return;
@@ -723,7 +817,7 @@ async function sbLoad(){
     if(g.data.length===0 && expenses.length){ await sb.from('gastos').insert(expenses.map(gToRow)); }
     else { expenses=g.data.map(gFromRow); saveG(); }
     if(a.data.length===0 && stays.length){ await sb.from('alojamientos').insert(stays.map(sToRow)); }
-    else { stays=a.data.map(sFromRow); saveS(); }
+    else { stays=mapStayRows(a.data); saveS(); }
     renderPanel();
   }catch(e){ console.warn('Supabase load falló',e); }
 }
@@ -731,7 +825,7 @@ async function sbRefresh(which){
   if(!sb||!sbReady) return;
   try{
     if(which==='gastos'){const {data,error}=await sb.from('gastos').select('*').order('created_at',{ascending:true});if(!error){expenses=data.map(gFromRow);saveG();if(view==='gastos')renderPanel();}}
-    else{const {data,error}=await sb.from('alojamientos').select('*').order('created_at',{ascending:true});if(!error){stays=data.map(sFromRow);saveS();if(view==='stay')renderPanel();}}
+    else{const {data,error}=await sb.from('alojamientos').select('*').order('created_at',{ascending:true});if(!error){stays=mapStayRows(data);saveS();if(view==='stay'||view==='presupuesto')renderPanel();}}
   }catch(e){}
 }
 function sbSubscribe(){
@@ -745,6 +839,8 @@ function sbSubscribe(){
 }
 async function sbIns(table,row){ if(!sb||!sbReady) return; try{const {error}=await sb.from(table).insert(row);if(error){console.warn('insert',table,error);alert('No se pudo guardar en la nube. Se guardó solo en este dispositivo.');}}catch(e){} }
 async function sbDel(table,id){ if(!sb||!sbReady) return; try{await sb.from(table).delete().eq('id',id);}catch(e){} }
+/* Sincroniza la marca `elegida` de todas las casas de una base (una elegida por base). Silencioso si la columna aún no existe. */
+async function sbSetElegida(base){ if(!sb||!sbReady) return; try{ await Promise.all(stays.filter(s=>s.base===base).map(s=>sb.from('alojamientos').update({elegida:!!s.elegida}).eq('id',s.id))); }catch(e){} }
 
 /* ============ Fotos (Wikimedia Commons, fijas) ============ */
 const U='https://upload.wikimedia.org/wikipedia/commons/thumb/';
@@ -865,6 +961,7 @@ function renderPanel(){
   const body=document.getElementById('panelBody');
   if(view==='gastos'){body.innerHTML=renderGastos();bindGastos();return;}
   if(view==='stay'){body.innerHTML=renderStays();bindStays();return;}
+  if(view==='presupuesto'){body.innerHTML=renderPresupuesto();bindPresupuesto();return;}
   body.innerHTML = view==='agenda'?renderAgendaView():renderMapView();
   body.querySelectorAll('[data-poi]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();flyTo(el.getAttribute('data-poi'));if(window.innerWidth<=820)closeSheet();}));
   if(view==='agenda'){
