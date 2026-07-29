@@ -641,7 +641,18 @@ function bindStays(){
     fill.disabled=true;fill.textContent='⏳';setMsg('Abriendo el anuncio…','busy');
     let d=null,err=null;
     try{
-      const r=await sb.functions.invoke('resumen-link',{body:{url:u}});
+      const invokeBody={url:u};
+      /* Booking bloquea las IPs de datacenter; lo leemos desde ESTE navegador vía jina (IP residencial) y se lo pasamos ya listo a la función. */
+      if(/booking\.com/i.test(u)){
+        setMsg('Leyendo Booking (tarda unos segundos)…','busy');
+        try{
+          const ac=new AbortController();const to=setTimeout(()=>ac.abort(),28000);
+          const jr=await fetch('https://r.jina.ai/'+u,{headers:{'Accept':'application/json','X-Return-Format':'markdown'},signal:ac.signal});
+          clearTimeout(to);
+          if(jr.ok){const jd=(await jr.json()).data;if(jd)invokeBody.prefetched={metadata:jd.metadata||{},content:(jd.content||'').slice(0,200000),title:jd.title||'',description:jd.description||''};}
+        }catch(e){}
+      }
+      const r=await sb.functions.invoke('resumen-link',{body:invokeBody});
       if(r.error){
         try{const j=await r.error.context.json();err=j&&j.error;}catch(e){}
         if(!err)err='No se pudo leer el anuncio. Llena los datos a mano.';

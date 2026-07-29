@@ -25,6 +25,7 @@ const CORS = {
 const UA = "WhatsApp/2.19.81 A";
 const MAX_HTML = 2_000_000;
 const TIMEOUT_MS = 15_000;
+const JINA_TIMEOUT_MS = 25_000; // jina (proxy lector) puede tardar más
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
@@ -108,7 +109,7 @@ const aNum = (s: string): number | null => {
   return isNaN(n) ? null : n;
 };
 
-function detectarTasas(texto: string): Tasa[] {
+function detectarTasas(texto: string, strict = false): Tasa[] {
   if (!texto) return [];
   const t = normTxt(texto);
   const cashContext = CASH_RE.test(t);
@@ -135,7 +136,9 @@ function detectarTasas(texto: string): Tasa[] {
     const sepA = aslice.search(/[,.;:•\n]/);
     const after = sepA >= 0 ? aslice.slice(0, sepA) : aslice;
     const cat = categoriaDe(before) || categoriaDe(after);
-    if (!cat && !CASH_RE.test(before + after) && !cashContext) continue; // sin categoría ni contexto efectivo → ignorar
+    // strict (texto ruidoso de jina/Booking): solo cargos con categoría real, sin el comodín de contexto global
+    if (strict) { if (!cat) continue; }
+    else if (!cat && !CASH_RE.test(before + after) && !cashContext) continue;
     items.push({
       texto: normTxt(before + " " + cur.raw + " " + after).slice(0, 160),
       monto: cur.val,
@@ -182,6 +185,62 @@ function limpiarBloque(s: string): string {
   return decode(t);
 }
 
+// --- Estrategias de descarga ---
+type DirectRes = { ok: true; html: string; finalUrl: string } | { ok: false; blocked?: boolean; error?: string };
+
+async function fetchDirect(target: URL): Promise<DirectRes> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(target.toString(), {
+      redirect: "follow", signal: ctrl.signal,
+      headers: { "User-Agent": UA, "Accept": "text/html,application/xhtml+xml", "Accept-Language": "es-ES,es;q=0.9,en;q=0.8" },
+    });
+  } catch (e) {
+    clearTimeout(t);
+    const ab = e instanceof Error && e.name === "AbortError";
+    return { ok: false, error: ab ? "El anuncio tardó demasiado en responder." : "No se pudo abrir el link." };
+  }
+  clearTimeout(t);
+  if (res.status === 403 || res.status === 429 || res.status === 202) return { ok: false, blocked: true };
+  if (!res.ok) return { ok: false, error: `El anuncio respondió ${res.status}.` };
+  const ctype = res.headers.get("content-type") || "";
+  if (!/text\/html|application\/xhtml/i.test(ctype)) return { ok: false, error: "Ese link no es una página web." };
+  return { ok: true, html: (await res.text()).slice(0, MAX_HTML), finalUrl: res.url || target.toString() };
+}
+
+// Sitios que bloquean IPs de datacenter (Booking) se leen vía r.jina.ai, que fetchea
+// desde sus propias IPs y devuelve las etiquetas OG en `metadata` + el texto en `content`.
+type JinaRes = { metadata: Record<string, string>; content: string; title: string; description: string };
+async function fetchViaJina(url: string): Promise<JinaRes | null> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), JINA_TIMEOUT_MS);
+  try {
+    const r = await fetch("https://r.jina.ai/" + url, {
+      signal: ctrl.signal,
+      headers: { "Accept": "application/json", "X-Return-Format": "markdown", "X-No-Cache": "true" },
+    });
+    clearTimeout(t);
+    if (!r.ok) return null;
+    const j = await r.json();
+    const d = j?.data;
+    if (!d) return null;
+    return { metadata: d.metadata || {}, content: String(d.content || "").slice(0, MAX_HTML), title: d.title || "", description: d.description || "" };
+  } catch { clearTimeout(t); return null; }
+}
+
+// Booking puntúa sobre 10 (7,7) con nº de opiniones. Lo sacamos del texto.
+function ratingBooking(txt: string): { score: number | null; reviews: number | null } {
+  // "Scored 7.7" es la puntuación GLOBAL de Booking; "rated 9.4/10" son sub-puntuaciones (ubicación, etc.) → evitarlas.
+  const sm = txt.match(/\bScored\s+(\d(?:[.,]\d)?)/i)
+    || txt.match(/(?:Puntuaci[oó]n|Valoraci[oó]n|Calificaci[oó]n)(?:\s+global)?\D{0,15}?(\d(?:[.,]\d)?)/i);
+  const rm = txt.match(/([\d.,]+)\s*(?:reviews?|opiniones|comentarios|rese[ñn]as|valutazioni)/i);
+  const score = sm ? num(sm[1]) : null;
+  const reviews = rm ? num(rm[1].replace(/[.,]/g, "")) : null;
+  return { score: score != null && score > 0 && score <= 10 ? score : null, reviews };
+}
+
 /** Lee las especificaciones del og:title de Airbnb (inglés y español). */
 function specsAirbnb(titulo: string) {
   const rating = num(titulo.match(/★\s*([\d.,]+)/)?.[1]);
@@ -197,9 +256,15 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ error: "Usa POST." }, 405);
 
   let url = "";
+  let prefetched: JinaRes | null = null;
   try {
     const body = await req.json();
     url = String(body?.url ?? "").trim();
+    // El navegador (IP residencial) puede haber leído el anuncio vía jina y mandarlo aquí ya listo.
+    if (body?.prefetched && typeof body.prefetched === "object") {
+      const p = body.prefetched;
+      prefetched = { metadata: p.metadata || {}, content: String(p.content || "").slice(0, MAX_HTML), title: p.title || "", description: p.description || "" };
+    }
   } catch {
     return json({ error: "Cuerpo inválido." }, 400);
   }
@@ -214,46 +279,45 @@ Deno.serve(async (req: Request) => {
   const esAirbnb = /(^|\.)airbnb\.[a-z.]+$/.test(host) || host === "abnb.me";
   const esBooking = /(^|\.)booking\.com$/.test(host);
 
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-  let res: Response;
-  try {
-    res = await fetch(target.toString(), {
-      redirect: "follow",
-      signal: ctrl.signal,
-      headers: { "User-Agent": UA, "Accept": "text/html,application/xhtml+xml", "Accept-Language": "es-ES,es;q=0.9,en;q=0.8" },
-    });
-  } catch (e) {
-    clearTimeout(t);
-    const abortado = e instanceof Error && e.name === "AbortError";
-    return json({ error: abortado ? "El anuncio tardó demasiado en responder." : "No se pudo abrir el link." }, 502);
-  }
-  clearTimeout(t);
+  // Elegir fuente: Booking bloquea las IPs de datacenter → siempre vía jina.
+  // El resto: intento directo y, si lo bloquean, caigo a jina.
+  let src: "direct" | "jina" | null = null;
+  let html = "";
+  let jina: JinaRes | null = null;
+  let finalUrl = target.toString();
 
-  if (res.status === 403 || res.status === 429 || res.status === 202) {
-    return json({ error: `${host} bloqueó la lectura automática (${res.status}). Llena los datos a mano.` }, 502);
-  }
-  if (!res.ok) return json({ error: `El anuncio respondió ${res.status}.` }, 502);
-
-  const ctype = res.headers.get("content-type") || "";
-  if (!/text\/html|application\/xhtml/i.test(ctype)) return json({ error: "Ese link no es una página web." }, 415);
-
-  const final = new URL(res.url || target.toString());
-
-  // Booking desvía los bots a la página de ciudad y responde 200: eso NO es el anuncio.
-  if (esBooking) {
-    const eraFicha = /\/hotel\//i.test(target.pathname);
-    const sigueEnFicha = /\/hotel\//i.test(final.pathname);
-    if (!eraFicha || !sigueEnFicha || /\/city\//i.test(final.pathname)) {
-      return json({ error: "Booking bloquea la lectura automática de sus anuncios. Copia los datos a mano (el link sí se guarda)." }, 502);
+  if (prefetched) {
+    // el navegador ya lo leyó vía jina → usarlo tal cual
+    src = "jina"; jina = prefetched;
+  } else {
+    if (!esBooking) {
+      const d = await fetchDirect(target);
+      if (d.ok) { src = "direct"; html = d.html; finalUrl = d.finalUrl; }
+      else if (!d.blocked) return json({ error: d.error }, 502);
+    }
+    if (src === null) {
+      jina = await fetchViaJina(target.toString()); // fallback (puede fallar por rate-limit de IP compartida)
+      if (jina) src = "jina";
     }
   }
+  if (src === null) {
+    return json({ error: esBooking
+      ? "No pude leer este anuncio de Booking ahora mismo (a veces tarda). Prueba de nuevo en un momento o llena los datos a mano; el link sí se guarda."
+      : `${host} bloqueó la lectura automática. Llena los datos a mano.` }, 502);
+  }
 
-  const html = (await res.text()).slice(0, MAX_HTML);
-
-  const ogTitle = meta(html, "og:title") ?? meta(html, "twitter:title");
-  const ogDesc = meta(html, "og:description") ?? meta(html, "twitter:description") ?? meta(html, "description");
-  const ogImg = meta(html, "og:image") ?? meta(html, "og:image:secure_url") ?? meta(html, "twitter:image");
+  // OG tags: del HTML (directo) o del metadata de jina.
+  let ogTitle: string | null, ogDesc: string | null, ogImg: string | null;
+  if (src === "direct") {
+    ogTitle = meta(html, "og:title") ?? meta(html, "twitter:title");
+    ogDesc = meta(html, "og:description") ?? meta(html, "twitter:description") ?? meta(html, "description");
+    ogImg = meta(html, "og:image") ?? meta(html, "og:image:secure_url") ?? meta(html, "twitter:image");
+  } else {
+    const m = jina!.metadata;
+    ogTitle = decode(m["og:title"] || m["twitter:title"] || jina!.title || "") || null;
+    ogDesc = decode(m["og:description"] || m["twitter:description"] || m["description"] || jina!.description || "") || null;
+    ogImg = m["og:image"] || m["og:image:secure_url"] || m["twitter:image"] || null;
+  }
 
   let nombre: string | null = null;
   let descripcion: string | null = null;
@@ -264,18 +328,27 @@ Deno.serve(async (req: Request) => {
   let capacidad: number | null = null;
 
   let textoTasas = ogDesc || "";
-  if (esAirbnb && ogTitle) {
-    // En Airbnb el og:description es el título real del anuncio y el og:title trae las specs.
+  if (esAirbnb && src === "direct" && ogTitle) {
+    // Airbnb: og:description es el título real del anuncio y og:title trae las specs.
     nombre = ogDesc || ogTitle;
     descripcion = ogTitle;
     const s = specsAirbnb(ogTitle);
     rating = s.rating; habitaciones = s.habitaciones; camas = s.camas; banos = s.banos;
     capacidad = num(html.match(/"personCapacity"\s*:\s*(\d+)/)?.[1]);
     const larga = descripcionAirbnb(html);
-    if (larga) textoTasas = larga; // la descripción completa es donde viven las tasas
+    if (larga) textoTasas = larga;
+  } else if (esBooking) {
+    // Booking: puntúa /10; lo ponemos en la descripción (no en la ★ /5) para no confundir escalas.
+    nombre = ogTitle;
+    const contenido = src === "jina" ? jina!.content : html;
+    const rb = ratingBooking(contenido);
+    const marca = rb.score != null ? `Booking ${String(rb.score).replace(".", ",")}/10${rb.reviews ? ` · ${rb.reviews} opiniones` : ""}` : "";
+    descripcion = [marca, ogDesc].filter(Boolean).join(" · ") || null;
+    textoTasas = contenido; // el texto largo trae las tasas
   } else {
-    nombre = ogTitle || (html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] ? decode(html.match(/<title[^>]*>([^<]*)<\/title>/i)![1]) : null);
+    nombre = ogTitle || (src === "direct" && html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] ? decode(html.match(/<title[^>]*>([^<]*)<\/title>/i)![1]) : null);
     descripcion = ogDesc;
+    if (src === "jina") textoTasas = jina!.content;
   }
 
   if (!nombre && !ogImg && !descripcion) {
@@ -283,18 +356,19 @@ Deno.serve(async (req: Request) => {
   }
 
   let foto: string | null = ogImg;
-  if (foto) { try { foto = new URL(foto, final.toString()).toString(); } catch { foto = null; } }
+  if (foto) { try { foto = new URL(foto, finalUrl).toString(); } catch { foto = null; } }
 
-  const tasas = detectarTasas(textoTasas);
+  // strict cuando el texto viene de jina (markdown ruidoso): solo cargos con categoría real.
+  const tasas = detectarTasas(textoTasas, src === "jina");
 
   return json({
     nombre: nombre ? nombre.slice(0, 120) : null,
     foto,
     descripcion: descripcion ? descripcion.slice(0, 300) : null,
     rating, habitaciones, camas, banos, capacidad,
-    tasas, // extras/tasas en efectivo detectadas en la descripción (puede venir vacío)
+    tasas,
     fuente: host,
-    // El precio de la reserva no viene: depende de fechas y lo carga por JS.
+    via: src, // "direct" o "jina" (Booking)
     aviso: "El precio base no se puede leer automáticamente: ponlo a mano.",
   });
 });
