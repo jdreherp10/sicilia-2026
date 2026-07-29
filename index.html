@@ -224,6 +224,7 @@
   .rgoto{width:100%;border:1px solid var(--line);background:var(--bg);color:var(--accent);font-weight:700;font-size:12.5px;padding:8px;border-radius:9px;cursor:pointer;font-family:inherit}
   .rgoto:hover{border-color:rgba(56,189,248,.4)}
   .rfoot{font-size:11px;color:var(--muted);line-height:1.5;margin:4px 2px 10px}
+  .rnote{font-size:11px;color:var(--muted);line-height:1.5;margin-top:9px;padding-top:8px;border-top:1px solid var(--line)}
 </style>
 </head>
 <body>
@@ -766,17 +767,19 @@ function renderPresupuesto(){
         <div class="stextra tot"><span>Total de la base</span><span>${usd(m.total)}</span></div>
         ${dep?`<div class="stextra dep"><span>🔐 Depósito reembolsable (aparte)</span><span>${usd(dep)}</span></div>`:''}
       </div>
-      <div class="rsplit">${splitHtml}</div></div>`;
+      <div class="rsplit">${splitHtml}</div>
+      ${ch.notes?`<div class="rnote">${ch.notes}</div>`:''}</div>`;
   }).join('');
   const ncards=UNITS.map(u=>`<div class="ucard" style="--c:${u.color}"><div class="uname">${u.name}</div>
     <div class="ubal" style="color:#cfe3f5">${usd(nucleo[u.id])}</div><div class="ulbl">le toca en hospedaje</div>
     <div class="upaid">${heads[u.id]} de ${STAYHEADS} puestos${u.id==='A'?' · Elina ¼':''}</div></div>`).join('');
-  const totalBox=`<div class="settlebox"><div class="st">Total hospedaje · ${nChosen} de ${ORDER.length} bases elegidas</div>
-    <div class="settle">Reservas (Airbnb, USD)<span>${usd(baseSum)}</span></div>
-    ${extraSum?`<div class="settle">Tasas/efectivo (€→USD)<span>${usd(extraSum)}</span></div>`:''}
+  const totalBox=`<div class="settlebox"><div class="st">Total hospedaje · ${nChosen} de ${ORDER.length} bases reservadas</div>
+    <div class="settle">Reservas (Airbnb/Booking · ya pagadas)<span>${usd(baseSum)}</span></div>
+    ${extraSum?`<div class="settle">Tasas turísticas (se pagan en el sitio)<span>${usd(extraSum)}</span></div>`:''}
     <div class="settle ok">Total a repartir<span>${usd(totalSum)}</span></div>
-    ${depSum?`<div class="settle" style="color:var(--muted)">Depósitos reembolsables (no se reparten)<span>${usd(depSum)}</span></div>`:''}</div>`;
-  const note=`<div class="note luggage" style="margin-bottom:11px"><span class="ic">📊</span><span>Proyección del gasto en <b>hospedaje</b> con la casa <b>elegida</b> por base (la que reservaste o vas a reservar), <b>en USD</b>. Reparto por los mismos <b>7,25 puestos</b> que la pestaña 💶 (Elina ¼; Pili y Pilo repartidas). Reserva en USD; tasas/efectivo en € del anuncio convertidas (1 € = ${usd(FX)}). Es una <b>estimación</b> aparte: <b>no</b> toca los gastos reales de 💶.</span></div>`;
+    ${depSum?`<div class="settle" style="color:var(--muted)">Depósitos reembolsables (no se reparten)<span>${usd(depSum)}</span></div>`:''}</div>
+    <div class="rfoot" style="color:#9fd0ff"><b>💡 Casi todo ya está pagado.</b> Johan adelantó las reservas con su tarjeta; cada núcleo le reembolsa la cifra de arriba. Solo las <b>tasas turísticas</b> se pagan en efectivo al llegar a cada alojamiento y se reparten igual.</div>`;
+  const note=`<div class="note luggage" style="margin-bottom:11px"><span class="ic">📊</span><span>Lo que le toca a cada núcleo en <b>hospedaje</b>, con los <b>valores finales de las facturas</b>, <b>en USD</b>. Reparto por los mismos <b>7,25 puestos</b> que la pestaña 💶 (Elina ¼; Pili y Pilo repartidas). Reservas en USD; tasas en € convertidas (1 € = ${usd(FX)}). Es un desglose aparte: <b>no</b> toca los gastos reales de 💶.</span></div>`;
   const foot=`<div class="rfoot">Para cambiar una casa, ve a <b>🏠 Casas</b> y toca «📊 Elegir para el presupuesto» en la que quieras. Solo cuenta una por base. Los depósitos se muestran aparte porque se devuelven.</div>`;
   return note+`<div class="gsummary">${ncards}</div>`+totalBox+`<div class="sectionlbl">Desglose por base</div>`+rowsHtml+foot;
 }
