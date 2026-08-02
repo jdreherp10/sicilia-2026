@@ -2,11 +2,17 @@
 <html lang="es">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0a1120" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Sicilia 2026" />
+<meta name="description" content="Plan del viaje familiar a Sicilia, 2–15 oct 2026: agenda día a día, bases, casas, gastos y la van." />
 <title>Sicilia 2026 · Viaje familiar</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
-  :root{--bg:#0a1120;--panel:#0f1a2c;--panel2:#13233b;--line:#22304a;--txt:#eef4fb;--muted:#93a4bb;--accent:#38bdf8;--gold:#e9b949;--safe-b:env(safe-area-inset-bottom,0px)}
+  :root{--bg:#0a1120;--panel:#0f1a2c;--panel2:#13233b;--line:#22304a;--txt:#eef4fb;--muted:#93a4bb;--accent:#38bdf8;--gold:#e9b949;--safe-b:env(safe-area-inset-bottom,0px);--navH:0px}
   *{box-sizing:border-box}
   html,body{height:100%;margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased}
   #app{display:flex;height:100vh;height:100dvh;overflow:hidden}
@@ -115,16 +121,81 @@
   .legend .row{display:flex;align-items:center;gap:8px;margin:4px 0;color:var(--muted)}
   .legend .dot{width:10px;height:10px;border-radius:50%;flex:none}
   .legend .ln{width:16px;height:0;border-top:3px solid var(--accent);flex:none}.legend .ln.dash{border-top:2px dashed #2dd4bf}
+  /* ===== Táctil: respuesta al dedo en todo lo que se toca ===== */
+  button,a,.chip,.pill,.gchip,.stopchip,.basecard,.place,.tab,.erow .edel,summary{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+  button:active,.chip:active,.pill:active,.gchip:active,.stopchip:active,.stchoose:active,.rgoto:active,.gadd:active,.tab:active,summary:active{transform:scale(.97)}
+  .basecard:active,.place:active,.stcard:active{transform:scale(.99)}
+  .gchip,.pill,.chip,.stopchip,.tab{user-select:none;-webkit-user-select:none}
+
+  /* ===== Barra de pestañas inferior (solo móvil) ===== */
+  #tabbar{display:none}
+  .tab{border:0;background:transparent;color:var(--muted);font-family:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px 1px;font-size:9.5px;font-weight:700;cursor:pointer;letter-spacing:-.01em;transition:color .15s}
+  .tab .ti{font-size:20px;line-height:1;transition:transform .2s}
+  .tab.on{color:var(--accent)}
+  .tab.on .ti{transform:translateY(-2px) scale(1.08)}
+  .tab.on::before{content:"";position:absolute;top:0;width:26px;height:3px;border-radius:0 0 4px 4px;background:var(--accent)}
+
+  /* ===== Avisos flotantes ===== */
+  #toast{position:fixed;left:50%;bottom:calc(var(--navH) + 18px);transform:translate(-50%,16px);z-index:3000;background:#1b2c46;border:1px solid var(--line);color:var(--txt);font-size:13px;font-weight:600;padding:11px 16px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:.25s;max-width:88vw;text-align:center}
+  #toast.on{opacity:1;transform:translate(-50%,0)}
+  #toast.bad{border-color:rgba(251,113,133,.5);color:#fda4af}
+
+  /* ===== Formularios plegables (la lista manda, el formulario se abre a demanda) ===== */
+  .fold{background:var(--panel2);border:1px solid var(--line);border-radius:13px;margin-bottom:14px;overflow:hidden}
+  .fold>summary{list-style:none;cursor:pointer;padding:14px;font-size:13.5px;font-weight:800;color:var(--accent);display:flex;align-items:center;gap:8px}
+  .fold>summary::-webkit-details-marker{display:none}
+  .fold>summary::after{content:"▾";margin-left:auto;color:var(--muted);transition:transform .2s}
+  .fold[open]>summary::after{transform:rotate(180deg)}
+  .fold[open]>summary{border-bottom:1px solid var(--line)}
+  .fold .gform{margin:0;border:0;border-radius:0;background:transparent}
+
+  /* ===== Vista móvil: mapa a pantalla completa + hoja deslizable + tabbar ===== */
   @media(max-width:820px){
-    #app{flex-direction:column}#mapWrap{height:100vh;height:100dvh}
-    #panel{position:fixed;left:0;right:0;bottom:0;top:auto;width:100%;min-width:0;max-height:92vh;border-right:0;border-top:1px solid var(--line);border-radius:18px 18px 0 0;box-shadow:0 -10px 34px rgba(0,0,0,.55)}
-    #sheetHandle{display:flex;justify-content:center;align-items:center;padding:9px 0 4px;cursor:pointer;flex-direction:column;gap:6px}
-    #sheetHandle .grab{width:40px;height:5px;border-radius:3px;background:#33465f}
-    #sheetHandle .hint{font-size:11px;color:var(--muted);font-weight:600}
-    #panelBody{display:none;max-height:66vh}#panel.open #panelBody{display:block}
-    #panel.open #sheetHandle .hint::after{content:"Ocultar ▾"}#sheetHandle .hint::after{content:"Ver plan ▴"}
-    .legend{display:none}.brand h1{font-size:17px}
+    :root{--navH:calc(56px + var(--safe-b))}
+    #app{flex-direction:column}
+    #mapWrap{position:fixed;inset:0;height:100dvh}
+    #panel{position:fixed;left:0;right:0;bottom:var(--navH);top:auto;width:100%;min-width:0;height:min(86dvh,760px);border-right:0;border-top:1px solid var(--line);border-radius:20px 20px 0 0;box-shadow:0 -12px 40px rgba(0,0,0,.6);transform:translateY(var(--ty,80%));transition:transform .3s cubic-bezier(.32,.72,0,1);will-change:transform}
+    #panel.dragging{transition:none}
+    #sheetHandle{display:flex;justify-content:center;align-items:center;padding:10px 0 2px;cursor:grab;flex-direction:column;gap:5px;touch-action:none}
+    #sheetHandle .grab{width:44px;height:5px;border-radius:3px;background:#3a4f6b;transition:background .2s}
+    #panel.dragging #sheetHandle .grab{background:var(--accent)}
+    #sheetHandle .hint{display:none}
+    #panelHead{padding:6px 16px 10px;touch-action:none}
+    #panelHead .stats,#panelHead .seg{display:none}
+    .brand h1{font-size:16px}.brand .sub{font-size:11px}
+    #panelBody{padding:12px 13px 26px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+    .legend{display:none}
+    #tabbar{display:grid;grid-template-columns:repeat(6,1fr);position:fixed;left:0;right:0;bottom:0;z-index:1600;background:rgba(8,14,26,.96);backdrop-filter:blur(14px);border-top:1px solid var(--line);padding-bottom:var(--safe-b)}
+    .tab{position:relative;min-height:56px}
+    /* dedos, no punteros: todo lo que se toca crece */
+    .gform input{font-size:16px;padding:13px 12px}  /* 16px evita el zoom automático de iOS */
+    .gform label{font-size:11px}
+    .gchip{padding:10px 14px;font-size:13px}
+    .chip,.stopchip{padding:8px 13px;font-size:12px}
+    .pill{padding:10px 14px;font-size:12.5px}
+    .ddnav button{padding:14px 10px;font-size:13px}
+    .gadd{padding:15px;font-size:15px}
+    .stchoose,.rgoto,.gbtns button{padding:13px;font-size:13px}
+    .stdel,.erow .edel{width:38px;height:38px;display:flex;align-items:center;justify-content:center;border-radius:10px}
+    .stcard .stdel{top:6px;right:6px}
+    .stlink,.stinvite{padding:12px 14px;font-size:13px}
+    .toggles label{padding:6px 0;font-size:13.5px}
+    .toggles input{width:20px;height:20px}
+    .basecard{padding:15px 15px 16px}
+    .place{padding:10px}
+    /* cabecera de día pegajosa: siempre sabes qué día estás mirando */
+    .ddhd{position:sticky;top:0;z-index:5;background:var(--panel);margin:0 -13px 13px;padding:10px 13px 12px}
+    .pills{position:sticky;top:0;z-index:6;background:var(--panel);margin:0 -13px;padding:2px 13px 10px}
+    .ddhd{top:52px}
   }
+  @media(max-width:820px) and (display-mode:standalone){#panel{height:min(88dvh,800px)}}
+  /* ===== Deslizar entre días / pestañas ===== */
+  #panelBody.swipe-l{animation:swl .22s ease}
+  #panelBody.swipe-r{animation:swr .22s ease}
+  @keyframes swl{from{opacity:.25;transform:translateX(26px)}to{opacity:1;transform:none}}
+  @keyframes swr{from{opacity:.25;transform:translateX(-26px)}to{opacity:1;transform:none}}
+  .swipehint{display:none}
+  @media(max-width:820px){.swipehint{display:flex;align-items:center;justify-content:center;gap:8px;font-size:11px;color:var(--muted);font-weight:600;padding:2px 0 10px;opacity:.75}}
   /* Gastos */
   .gsummary{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
   .ucard{background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:12px;padding:10px 13px}
@@ -225,6 +296,33 @@
   .rgoto:hover{border-color:rgba(56,189,248,.4)}
   .rfoot{font-size:11px;color:var(--muted);line-height:1.5;margin:4px 2px 10px}
   .rnote{font-size:11px;color:var(--muted);line-height:1.5;margin-top:9px;padding-top:8px;border-top:1px solid var(--line)}
+  /* ===== Reserva del carro (voucher) ===== */
+  .vcard{background:linear-gradient(180deg,rgba(74,222,128,.09),rgba(74,222,128,.03));border:1px solid rgba(74,222,128,.42);border-radius:15px;padding:14px;margin-bottom:13px}
+  .vtop{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px}
+  .vtop .vic{font-size:30px;line-height:1}
+  .vname{font-size:16px;font-weight:800;line-height:1.25}
+  .vsub{font-size:11.5px;color:var(--muted);margin-top:3px}
+  .vleg{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:11px 0}
+  .vleg .vl{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px 11px}
+  .vleg .vk{font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:800}
+  .vleg .vd{font-size:15px;font-weight:800;margin-top:4px}
+  .vleg .vt{font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.35}
+  .vacts{display:flex;gap:8px;margin:11px 0 4px}
+  .vact{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;text-align:center;border:1px solid var(--line);background:var(--bg);color:var(--txt);border-radius:11px;padding:12px 8px;font-size:12.5px;font-weight:700;font-family:inherit;cursor:pointer}
+  .vact.pri{border-color:rgba(74,222,128,.5);color:#86efac;background:rgba(74,222,128,.08)}
+  .vcodes{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .vcode{flex:1 1 46%;background:var(--bg);border:1px dashed var(--line);border-radius:11px;padding:9px 11px;cursor:pointer;text-align:left;color:var(--txt);font-family:inherit}
+  .vcode .vk{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800;display:block}
+  .vcode .vv{display:block;font-size:14px;font-weight:800;margin:4px 0 3px;letter-spacing:.04em;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .vcode .vcopy{display:block;font-size:9.5px;color:var(--accent);font-weight:700}
+  .vlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+  .vlist li{display:flex;gap:9px;font-size:12.5px;line-height:1.45;color:var(--txt)}
+  .vlist li .vb{flex:none;width:16px;text-align:center}
+  .vlist li span:last-child{color:var(--muted)}
+  .vlist li b{color:var(--txt)}
+  .valert{display:flex;gap:9px;align-items:flex-start;background:rgba(233,185,73,.09);border:1px solid rgba(233,185,73,.32);color:#f0dca6;border-radius:12px;padding:11px 12px;font-size:12px;line-height:1.5;margin-bottom:10px}
+  .vspecs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px}
+  @media(max-width:520px){.vleg{grid-template-columns:1fr}.vcode{flex:1 1 100%}}
 </style>
 </head>
 <body>
@@ -249,10 +347,33 @@
   </aside>
   <div id="mapWrap"><div id="map"></div><div class="legend" id="legend"></div></div>
 </div>
+<nav id="tabbar" aria-label="Secciones">
+  <button class="tab on" data-view="agenda"><span class="ti">📅</span>Agenda</button>
+  <button class="tab" data-view="map"><span class="ti">🗺️</span>Bases</button>
+  <button class="tab" data-view="stay"><span class="ti">🏠</span>Casas</button>
+  <button class="tab" data-view="gastos"><span class="ti">💶</span>Gastos</button>
+  <button class="tab" data-view="presupuesto"><span class="ti">📊</span>Hosp.</button>
+  <button class="tab" data-view="carro"><span class="ti">🚐</span>Carro</button>
+</nav>
+<div id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+/* ============ Utilidades de interfaz (pensadas para el dedo) ============ */
+/* Aviso flotante: reemplaza a alert() para no bloquear el pulgar en el celular. */
+function toast(msg,bad){
+  const t=document.getElementById('toast');if(!t)return;
+  t.textContent=msg;t.className=bad?'on bad':'on';
+  clearTimeout(toast._t);toast._t=setTimeout(()=>{t.className=bad?'bad':'';},2800);
+}
+function copyTxt(txt,msg){
+  const done=()=>toast(msg||'Copiado ✓');
+  const fallback=()=>{const ta=document.createElement('textarea');ta.value=txt;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done();}catch(e){toast('No se pudo copiar',true);}document.body.removeChild(ta);};
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(done).catch(fallback);
+  else fallback();
+}
+
 /* ============ Datos ============ */
 const BASES = {
   palermo:{name:'Palermo',color:'#a78bfa',nights:3,lat:38.1157,lng:13.3615,blurb:'Capital vibrante: catedral, Quattro Canti y mercados. Día al noroeste cercano.',trips:['monreale','mondello','segesta','castellammare','scopello','zingaro']},
@@ -292,8 +413,9 @@ const SPINE=[['pmo','palermo','45 min'],['palermo','cefalu','1 h'],['cefalu','ca
 /* ============ Agenda ============ */
 const DAYS=[
  {d:'Vie 2 oct',bs:'Llegada · Palermo',c:'#94a3b8',load:['g','Llegada'],items:[
-   {t:'15:30',k:'flight',poi:'pmo',a:'Aterrizaje en Palermo (PMO)',n:'Recoger la van + dejar las maletas de París en la consigna/locker'},
-   {t:'16:45',k:'drive',poi:'palermo',a:'A Palermo (45 min) + check-in'},
+   {t:'15:30',k:'flight',poi:'pmo',a:'Aterrizaje en Palermo (PMO)',n:'Maletas de París → consigna/locker'},
+   {t:'16:00',k:'drive',a:'Recoger la van · Eurorentcar',n:'Llamar al +39 379 262 8788 al salir con el equipaje: shuttle gratis desde llegadas (3 min). Presentarse antes de las 16:59'},
+   {t:'17:00',k:'drive',poi:'palermo',a:'A Palermo (45 min) + check-in'},
    {t:'18:00',k:'visit',poi:'palermo',a:'Primer paseo: Quattro Canti y Fontana Pretoria',n:'Toma de contacto suave'},
    {t:'20:30',k:'meal',a:'Cena de bienvenida'}]},
  {d:'Sáb 3 oct',bs:'Palermo',c:'#a78bfa',load:['y','Lleno'],items:[
@@ -386,12 +508,12 @@ const DAYS=[
    {t:'20:30',k:'meal',a:'Cena de despedida'}]},
  {d:'Jue 15 oct',bs:'San Vito → PMO → París',c:'#94a3b8',load:['y','Salida'],items:[
    {t:'08:00',k:'drive',poi:'pmo',a:'San Vito → aeropuerto de Palermo (1 h 45)',n:'Salida cómoda para el vuelo de las 12:55'},
-   {t:'09:45',k:'flight',poi:'pmo',a:'Devolver la van + recoger maletas del locker'},
+   {t:'10:30',k:'drive',poi:'pmo',a:'Devolver la van (Eurorentcar · hora pactada 10:30)',n:'Depósito lleno de diésel + shuttle al aeropuerto y recoger las maletas del locker'},
    {t:'11:00',k:'flight',a:'Facturación y control de seguridad'},
    {t:'12:55',k:'flight',a:'Vuelo Palermo (PMO) → París-Orly (ORY)'}]},
 ];
 const KIC={flight:'✈️',drive:'🚐',visit:'🏛️',beach:'🏖️',meal:'🍽️',rest:'😎',ferry:'⛴️',wine:'🍇'};
-const RESV={7:'🍇 Reservar la cata del viñedo del Etna con antelación.',11:'⛴️ Reservar el ferry a Favignana (Liberty Lines).'};
+const RESV={0:'🚐 Van ya reservada (Eurorentcar · conf. ZA1FR-OE9LO). Johan lleva su tarjeta de crédito física: depósito de € 1.600 en garantía. Ver pestaña 🚐 Carro.',7:'🍇 Reservar la cata del viñedo del Etna con antelación.',11:'⛴️ Reservar el ferry a Favignana (Liberty Lines).',14:'⛽ Devolver la van con el depósito lleno (política lleno→lleno) y hacer fotos del estado antes de entregarla.'};
 
 /* ============ Gastos compartidos ============ */
 const UNITS=[
@@ -482,6 +604,7 @@ function renderGastos(){
   }).join('');
   return `<div class="gsummary">${cards}</div>
     <div class="settlebox"><div class="st">Cómo saldar cuentas</div>${settleHtml}</div>
+    <details class="fold" ${expenses.length?'':'open'}><summary>➕ Añadir un gasto</summary>
     <div class="gform">
       <div><label>Descripción</label><input type="text" id="gDesc" placeholder="Cena, gasolina, entradas…"></div>
       <div><label>Monto (€)</label><input type="text" id="gAmt" inputmode="decimal" placeholder="0,00"></div>
@@ -492,12 +615,13 @@ function renderGastos(){
         <div class="chrow" style="margin-top:6px"><div class="gchip" id="gAll">Todos</div><div class="gchip" id="gNone">Ninguno</div></div></div>
       <div><label>Fecha</label><input type="date" id="gDate" value="${today}"></div>
       <button class="gadd" id="gAddBtn">+ Añadir gasto</button>
-    </div>
+    </div></details>
     <div class="sectionlbl">Gastos (${expenses.length}) · total ${money(total)}</div>
     <div class="elist">${list||'<div style="color:var(--muted);font-size:12px;padding:4px">Todavía no hay gastos. Añade el primero arriba.</div>'}</div>
-    <div class="gnote"><b>🔄 Sincronizado en vivo con la familia.</b> Todos ven los mismos gastos al instante. El respaldo de abajo es solo por si acaso (uso offline).
+    <details class="fold" style="margin-top:14px"><summary>🔄 Sincronización y respaldo</summary>
+    <div class="gnote" style="margin:0;border:0;border-radius:0"><b>Sincronizado en vivo con la familia.</b> Todos ven los mismos gastos al instante. El respaldo de abajo es solo por si acaso (uso offline).
       <textarea id="gJson" readonly>${JSON.stringify(expenses)}</textarea>
-      <div class="gbtns"><button id="gCopy">📋 Copiar respaldo</button><button id="gLoad">📥 Cargar pegado</button></div></div>`;
+      <div class="gbtns"><button id="gCopy">📋 Copiar respaldo</button><button id="gLoad">📥 Cargar pegado</button></div></div></details>`;
 }
 function bindGastos(){
   const body=document.getElementById('panelBody');
@@ -515,17 +639,17 @@ function bindGastos(){
     if(raw.indexOf(',')>=0) raw=raw.replace(/\./g,'').replace(',','.');
     const amt=parseFloat(raw);
     const date=document.getElementById('gDate').value||new Date().toISOString().slice(0,10);
-    if(!amt||amt<=0){alert('Pon un monto válido.');return;}
-    if(fFor.size===0){alert('Elige al menos una persona en «¿Para quién?».');return;}
+    if(!amt||amt<=0){toast('Pon un monto válido.',true);return;}
+    if(fFor.size===0){toast('Elige al menos una persona en «¿Para quién?».',true);return;}
     const forWhom=fFor.size===PEOPLE.length?[]:[...fFor];
     const ge={id:'e'+Date.now()+Math.floor(Math.random()*1000),date,desc,amount:amt,paidBy:fPaidBy,cat:fCat,forWhom};
-    expenses.push(ge);saveG();renderPanel();sbIns('gastos',gToRow(ge));
+    expenses.push(ge);saveG();renderPanel();sbIns('gastos',gToRow(ge));toast('Gasto añadido ✓');
   };
   body.querySelectorAll('[data-del]').forEach(el=>el.onclick=()=>{if(confirm('¿Eliminar este gasto?')){const did=el.dataset.del;expenses=expenses.filter(e=>e.id!==did);saveG();renderPanel();sbDel('gastos',did);}});
   const copy=document.getElementById('gCopy');
   if(copy)copy.onclick=()=>{const ta=document.getElementById('gJson');ta.select();const done=()=>{copy.textContent='✓ Copiado';setTimeout(()=>copy.textContent='📋 Copiar respaldo',1500);};if(navigator.clipboard){navigator.clipboard.writeText(ta.value).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}};
   const load=document.getElementById('gLoad');
-  if(load)load.onclick=()=>{const t=prompt('Pega aquí el respaldo (JSON) que te enviaron:');if(!t)return;try{const arr=JSON.parse(t);if(Array.isArray(arr)){expenses=arr;saveG();renderPanel();}else alert('Formato no válido.');}catch(e){alert('No se pudo leer el JSON.');}};
+  if(load)load.onclick=()=>{const t=prompt('Pega aquí el respaldo (JSON) que te enviaron:');if(!t)return;try{const arr=JSON.parse(t);if(Array.isArray(arr)){expenses=arr;saveG();renderPanel();}else toast('Formato no válido.',true);}catch(e){toast('No se pudo leer el JSON.',true);}};
 }
 
 /* ============ Alojamiento (Casas) ============ */
@@ -618,7 +742,8 @@ function renderStays(){
     <div class="ddhd"><div><div class="ddt" style="color:${b.color}">${b.name}</div><div class="ddb">entra ${sc.from} oct · sale ${sc.to+1} oct · ${sc.n} noches</div></div></div>
     <div class="staysum">${summary}</div>
     ${cards||'<div style="color:var(--muted);font-size:12px;padding:2px 4px 12px">Aún no hay casas para esta base. Añade la primera abajo 👇</div>'}
-    <div class="gform" style="margin-top:6px">
+    <details class="fold" style="margin-top:6px"><summary>➕ Añadir otra casa en ${b.name}</summary>
+    <div class="gform">
       <div><label>Nombre / apodo</label><input type="text" id="sName" placeholder="Villa con piscina · Airbnb"></div>
       <div><label>Link (Airbnb / Booking)</label>
         <div class="urlrow"><input type="text" id="sUrl" inputmode="url" placeholder="https://…"><button class="sfill" id="sFillBtn" type="button">✨ Rellenar</button></div>
@@ -634,10 +759,11 @@ function renderStays(){
       <div><label>Rating (opcional)</label><input type="text" id="sRate" inputmode="decimal" placeholder="4,8"></div>
       <div><label>Notas (opcional)</label><input type="text" id="sNotes" placeholder="A 10 min de la playa, terraza, ZTL…"></div>
       <button class="gadd" id="sAddBtn">+ Añadir casa a ${b.name}</button>
-    </div>
-    <div class="gnote"><b>🔄 Sincronizado en vivo con la familia.</b> Todos ven las mismas casas al instante. El respaldo de abajo es solo por si acaso (uso offline).
+    </div></details>
+    <details class="fold"><summary>🔄 Sincronización y respaldo</summary>
+    <div class="gnote" style="margin:0;border:0;border-radius:0"><b>Sincronizado en vivo con la familia.</b> Todos ven las mismas casas al instante. El respaldo de abajo es solo por si acaso (uso offline).
       <textarea id="sJson" readonly>${JSON.stringify(stays)}</textarea>
-      <div class="gbtns"><button id="sCopy">📋 Copiar respaldo</button><button id="sLoad">📥 Cargar pegado</button></div></div>`;
+      <div class="gbtns"><button id="sCopy">📋 Copiar respaldo</button><button id="sLoad">📥 Cargar pegado</button></div></div></details>`;
 }
 function bindStays(){
   const body=document.getElementById('panelBody');
@@ -662,9 +788,9 @@ function bindStays(){
     const lc=Math.max(raw.lastIndexOf(','),raw.lastIndexOf('.'));
     if(lc>=0){raw=raw.slice(0,lc).replace(/[.,]/g,'')+'.'+raw.slice(lc+1).replace(/[.,]/g,'');}
     const price=parseFloat(raw);
-    if(!price||price<=0){alert('Pon un precio total válido (en USD).');return;}
+    if(!price||price<=0){toast('Pon un precio total válido (en USD).',true);return;}
     const st={id:'s'+Date.now()+Math.floor(Math.random()*1000),base:sBase,name,url,price,rooms:numOr('sRooms'),baths:numOr('sBaths'),cap:numOr('sCap'),parking:sParking,rating:numOr('sRate'),notes:document.getElementById('sNotes').value.trim(),foto:sFoto,extras:sExtras.slice()};
-    stays.push(st);sFoto=null;sExtras=[];saveS();renderPanel();body.scrollTop=0;sbIns('alojamientos',sToRow(st));
+    stays.push(st);sFoto=null;sExtras=[];saveS();renderPanel();body.scrollTop=0;sbIns('alojamientos',sToRow(st));toast('Casa añadida ✓');
   };
   /* Auto-relleno: la Edge Function abre el anuncio del lado del servidor y devuelve lo legible. */
   const fill=document.getElementById('sFillBtn');
@@ -731,7 +857,7 @@ function bindStays(){
   const copy=document.getElementById('sCopy');
   if(copy)copy.onclick=()=>{const ta=document.getElementById('sJson');ta.select();const done=()=>{copy.textContent='✓ Copiado';setTimeout(()=>copy.textContent='📋 Copiar respaldo',1500);};if(navigator.clipboard){navigator.clipboard.writeText(ta.value).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}};
   const load=document.getElementById('sLoad');
-  if(load)load.onclick=()=>{const t=prompt('Pega aquí el respaldo (JSON) de casas:');if(!t)return;try{const arr=JSON.parse(t);if(Array.isArray(arr)){stays=arr;saveS();renderPanel();}else alert('Formato no válido.');}catch(e){alert('No se pudo leer el JSON.');}};
+  if(load)load.onclick=()=>{const t=prompt('Pega aquí el respaldo (JSON) de casas:');if(!t)return;try{const arr=JSON.parse(t);if(Array.isArray(arr)){stays=arr;saveS();renderPanel();}else toast('Formato no válido.',true);}catch(e){toast('No se pudo leer el JSON.',true);}};
 }
 
 /* ============ Presupuesto de hospedaje (proyección) ============ */
@@ -786,42 +912,121 @@ function renderPresupuesto(){
 }
 function bindPresupuesto(){
   const body=document.getElementById('panelBody');
-  body.querySelectorAll('[data-goto]').forEach(el=>el.onclick=()=>{
-    sBase=el.dataset.goto;view='stay';
-    document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.view==='stay'));
-    renderPanel();body.scrollTop=0;
-  });
+  body.querySelectorAll('[data-goto]').forEach(el=>el.onclick=()=>{sBase=el.dataset.goto;setView('stay',1);});
 }
 
-/* ============ Carro (cotizaciones + reparto) ============ */
+/* ============ Carro (RESERVADO) ============
+   Fuente de la verdad: voucher de DiscoverCars D014813266 (descargado el 2 ago 2026).
+   Todo lo de aquí sale literalmente del voucher; no inventar ni redondear.       */
+const CAR={
+  ref:'D014813266',            /* nº de reserva DiscoverCars */
+  conf:'ZA1FR-OE9LO',          /* nº de confirmación del proveedor */
+  oferta:'IT_FP',
+  canal:'DiscoverCars',
+  proveedor:'Eurorentcar',
+  conductor:'Johan Dreher',
+  modelo:'Renault Trafic o similar',
+  categoria:'Familiar Minibús · FVMD',
+  specs:['9 asientos','4 puertas','Aire acondicionado','Manual','Diésel'],
+  tel:'+393792628788',
+  telTxt:'+39 379 262 8788',
+  dir:'Strada Vicinale Finaita, 30, 90044 Carini PA, Italia',
+  recogida:{fecha:'vie 2 oct 2026',hora:'16:00',lugar:'Aeropuerto de Palermo (PMO)',horario:'08:00 – 21:59',limite:'16:59'},
+  entrega:{fecha:'jue 15 oct 2026',hora:'10:30',lugar:'Aeropuerto de Palermo (PMO)',horario:'08:00 – 21:59'},
+  dias:13,
+  pagado:{total:1424.15,cobertura:294.97,alquiler:1129.18}, /* alquiler = total − Cobertura Total (voucher: alquiler ya prepagado, reembolso completo 1424,15 USD) */
+  enSitio:{eur:70,usd:80.72,concepto:'Silla de seguridad para niños (9–18 kg)'},
+  deposito:{eur:1600,usd:1845},
+  franquicia:5190,             /* franquicia del proveedor (CDW/robo), USD */
+  limiteCobertura:3500,        /* tope de reembolso de la Cobertura Total, USD */
+  rc:'€ 7.750.000',
+  combustible:'Lleno → lleno (misma cantidad)',
+  km:'Kilometraje ilimitado',
+  incluido:['suplemento de aeropuerto','IVA','modificaciones gratuitas','asistencia en carretera'],
+  cancel:{full:1424.15,solo:294.97,nada:0},
+};
 const CKEY='sicilia_carro_v1';
-const CARDAYS=13; /* 2 oct 16:30 → 15 oct 10:30 = 13 días de alquiler */
+const CARDAYS=CAR.dias; /* 2 oct 16:00 → 15 oct 10:30 = 13 días de alquiler */
 let quotes;{const _r=localStorage.getItem(CKEY);if(_r){try{quotes=JSON.parse(_r)||[];}catch(e){quotes=[];}}else{quotes=[];}}
 let cTrans='manual', cSeg=true, cKm=true, cCancel=true; /* estado del formulario */
 function saveC(){try{localStorage.setItem(CKEY,JSON.stringify(quotes));}catch(e){}}
 /* Reparto del carro: TODOS ocupan asiento (Elina completa) → A 4 / B 2.5 / K 1.5 = 8 asientos. */
 function carHeads(){const h={};UNITS.forEach(u=>h[u.id]=0);PEOPLE.forEach(p=>{for(const u in p.w)h[u]+=p.w[u];});return h;}
 const carNum=id=>{let raw=(document.getElementById(id).value||'').trim().replace(/[^\d.,]/g,'');if(!raw)return null;const lc=Math.max(raw.lastIndexOf(','),raw.lastIndexOf('.'));if(lc>=0){raw=raw.slice(0,lc).replace(/[.,]/g,'')+'.'+raw.slice(lc+1).replace(/[.,]/g,'');}const n=parseFloat(raw);return isNaN(n)?null:n;};
+/* Bloque de la reserva confirmada: todo sale del voucher (CAR). */
+function renderReservaCarro(){
+  const heads=carHeads(),CH=UNITS.reduce((s,u)=>s+heads[u.id],0); /* 8 asientos */
+  const seatUsd=eur2usd(CAR.enSitio.eur);
+  const split={};UNITS.forEach(u=>split[u.id]=CAR.pagado.total*heads[u.id]/CH);
+  split[UNITS[0].id]+=seatUsd; /* la silla la paga íntegra el núcleo A */
+  const totalUsd=CAR.pagado.total+seatUsd;
+  const ncards=UNITS.map(u=>`<div class="ucard" style="--c:${u.color}"><div class="uname">${u.name}</div>
+    <div class="ubal" style="color:#cfe3f5">${usd(split[u.id])}</div><div class="ulbl">le toca del carro</div>
+    <div class="upaid">${heads[u.id]} de ${CH} asientos${u.id===UNITS[0].id?' + silla':''}</div></div>`).join('');
+  const specs=CAR.specs.map(s=>`<span class="stspec">${s}</span>`).join('');
+  const maps='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(CAR.dir);
+  const code=(k,v)=>`<button class="vcode" data-copy="${v}"><span class="vk">${k}</span><span class="vv">${v}</span><span class="vcopy">toca para copiar</span></button>`;
+  return `<div class="vcard">
+    <div class="vtop"><span class="vic">🚐</span><div>
+      <div class="vname">${CAR.modelo}</div>
+      <div class="vsub">${CAR.categoria} · ${CAR.proveedor} vía ${CAR.canal} · ${CAR.dias} días</div></div></div>
+    <div class="resban" style="margin-bottom:10px">✅ RESERVADO Y PAGADO</div>
+    <div class="vspecs stspecs">${specs}<span class="stspec good">♾️ ${CAR.km}</span><span class="stspec good">🛡️ Cobertura Total</span></div>
+    <div class="vleg">
+      <div class="vl"><div class="vk">🔑 Recogida</div><div class="vd">${CAR.recogida.hora}</div>
+        <div class="vt">${CAR.recogida.fecha}<br>${CAR.recogida.lugar}</div></div>
+      <div class="vl"><div class="vk">🏁 Devolución</div><div class="vd">${CAR.entrega.hora}</div>
+        <div class="vt">${CAR.entrega.fecha}<br>${CAR.entrega.lugar}</div></div>
+    </div>
+    <div class="vacts">
+      <a class="vact pri" href="tel:${CAR.tel}">📞 Llamar</a>
+      <a class="vact" href="${maps}" target="_blank" rel="noopener">📍 Cómo llegar</a>
+    </div>
+    <ul class="vlist" style="margin-top:12px">
+      <li><span class="vb">🚌</span><span>No es mostrador en la terminal: al recoger el equipaje llama al <b>${CAR.telTxt}</b> y mandan el <b>shuttle gratis</b>. Se toma frente a llegadas (Aero Park); la oficina está a 3 minutos.</span></li>
+      <li><span class="vb">📍</span><span>${CAR.dir}</span></li>
+      <li><span class="vb">🕗</span><span>Oficina abierta todos los días ${CAR.recogida.horario}</span></li>
+      <li><span class="vb">👤</span><span>Conductor principal: <b>${CAR.conductor}</b></span></li>
+    </ul>
+    <div class="vcodes">${code('Nº de reserva',CAR.ref)}${code('Confirmación',CAR.conf)}</div>
+  </div>
+
+  <div class="valert"><span>⏰</span><span><b>Hay que estar allí antes de las ${CAR.recogida.limite} del ${CAR.recogida.fecha}.</b> Si no, la reserva se cancela sin reembolso. El vuelo aterriza a las 15:30: si hay retraso con las maletas, llamar al ${CAR.telTxt} para avisar.</span></div>
+  <div class="valert"><span>💳</span><span><b>Depósito de ${money(CAR.deposito.eur)} (~${usd(CAR.deposito.usd)})</b> en la <b>tarjeta de crédito física de ${CAR.conductor}</b> (Visa / Mastercard / Amex de crédito, con chip y PIN, número impreso, válida hasta enero 2027). <b>No</b> aceptan débito, prepago, Apple/Google Pay ni tarjetas de bancos solo online. Se libera al devolver la van.</span></div>
+
+  <div class="settlebox"><div class="st">Cuánto costó el carro</div>
+    <div class="settle">Alquiler ${CAR.dias} días (prepagado)<span>${usd(CAR.pagado.alquiler)}</span></div>
+    <div class="settle">Cobertura Total DiscoverCars (prepagada)<span>${usd(CAR.pagado.cobertura)}</span></div>
+    <div class="settle">Silla de la niña · se paga al recoger<span>${money(CAR.enSitio.eur)} ≈ ${usd(seatUsd)}</span></div>
+    <div class="settle ok">Total del carro<span>${usd(totalUsd)}</span></div>
+    <div class="settle" style="color:var(--muted)">Depósito en garantía (no se reparte)<span>${money(CAR.deposito.eur)}</span></div>
+  </div>
+  <div class="sectionlbl" style="margin-top:14px">Lo que le toca a cada núcleo</div>
+  <div class="gsummary">${ncards}</div>
+  <div class="rfoot" style="color:#9fd0ff"><b>Reparto del carro:</b> aquí <b>Elina cuenta completa</b> (ocupa asiento) → 8 asientos: A 4 · B 2,5 · K 1,5. La <b>silla la paga íntegra ${UNITS[0].name}</b>. Johan ya adelantó ${usd(CAR.pagado.total)} con su tarjeta; los ${money(CAR.enSitio.eur)} de la silla se pagan en el mostrador. Cambio 1 € = ${usd(FX)} (${FXsrc}).</div>
+
+  <div class="sectionlbl" style="margin-top:16px">Qué hay que llevar</div>
+  <ul class="vlist" style="margin-bottom:14px">
+    <li><span class="vb">🧾</span><span><b>El voucher</b> de la reserva (impreso o en el celular)</span></li>
+    <li><span class="vb">🪪</span><span><b>Licencia física con foto</b> del conductor, emitida hace más de 1 año. Como no es de la UE, hay que llevar también el <b>permiso internacional (IDP)</b> junto a la licencia normal</span></li>
+    <li><span class="vb">🛂</span><span><b>Pasaporte</b> del conductor principal</span></li>
+    <li><span class="vb">💳</span><span><b>Tarjeta de crédito</b> a nombre de ${CAR.conductor} para el depósito</span></li>
+    <li><span class="vb">✈️</span><span><b>Datos del vuelo</b> de llegada</span></li>
+  </ul>
+
+  <div class="sectionlbl">Coberturas y letra chica</div>
+  <ul class="vlist" style="margin-bottom:14px">
+    <li><span class="vb">🛡️</span><span><b>Cobertura Total de ${CAR.canal}</b>: reembolsa hasta <b>${usd(CAR.limiteCobertura)}</b> (carrocería, techo, parabrisas, ventanas, espejos, faros, ruedas, neumáticos, chasis, robo, llaves perdidas, grúa, taxi y tasas administrativas). Primero cobra la rentadora y después DiscoverCars te devuelve el dinero (reclamos en ~48 h, hasta 28 días después de devolver el coche).</span></li>
+    <li><span class="vb">⚠️</span><span>La <b>franquicia del proveedor es ${usd(CAR.franquicia)}</b>, más alta que el tope de ${usd(CAR.limiteCobertura)}: en un siniestro grave la diferencia queda a cargo tuyo. Vale la pena fotografiar la van entera al recoger y al devolver.</span></li>
+    <li><span class="vb">🚫</span><span><b>No cubre</b>: interior del coche ni limpieza, daños a terceros, repostar mal el combustible, ni daños con el contrato incumplido.</span></li>
+    <li><span class="vb">🙅</span><span>En el mostrador pueden ofrecerte <b>seguro extra: puedes decir que no</b> («mi reserva ya incluye cobertura ampliada»). Deben entregarte la van igual con solo dejar el depósito. Si lo exigen, pide constancia por escrito y contacta a DiscoverCars.</span></li>
+    <li><span class="vb">⛽</span><span><b>Combustible ${CAR.combustible}</b> · ${CAR.km} · Responsabilidad civil hasta ${CAR.rc} · Incluye: ${CAR.incluido.join(', ')}.</span></li>
+    <li><span class="vb">↩️</span><span><b>Cancelación:</b> reembolso completo ${usd(CAR.cancel.full)}; si cancelas tarde, solo se devuelve la Cobertura Total (${usd(CAR.cancel.solo)}).</span></li>
+    <li><span class="vb">🧒</span><span>Edad para conducir 24–80 años. Cada conductor adicional se paga aparte y debe estar presente con su documentación al recoger.</span></li>
+  </ul>`;
+}
 function renderCarro(){
-  const chosen=quotes.find(q=>q.elegida)||null;
-  const heads=carHeads();const CH=UNITS.reduce((s,u)=>s+heads[u.id],0);
-  let report;
-  if(chosen){
-    const rental=chosen.precio||0,seat=chosen.carseat||0,total=rental+seat;
-    const split={};UNITS.forEach(u=>split[u.id]=rental*heads[u.id]/CH);split[UNITS[0].id]+=seat;
-    const ncards=UNITS.map(u=>`<div class="ucard" style="--c:${u.color}"><div class="uname">${u.name}</div>
-      <div class="ubal" style="color:#cfe3f5">${usd(split[u.id])}</div><div class="ulbl">le toca del carro</div>
-      <div class="upaid">${heads[u.id]} de ${CH} asientos${u.id===UNITS[0].id&&seat?' + silla':''}</div></div>`).join('');
-    report=`<div class="gsummary">${ncards}</div>
-      <div class="settlebox"><div class="st">Carro elegido · ${chosen.proveedor||chosen.modelo||'cotización'}</div>
-        <div class="settle">Alquiler (${CARDAYS} días)<span>${usd(rental)}</span></div>
-        ${seat?`<div class="settle">Silla de la niña (la paga ${UNITS[0].short})<span>${usd(seat)}</span></div>`:''}
-        <div class="settle ok">Total del carro<span>${usd(total)}</span></div>
-        ${chosen.deposito?`<div class="settle" style="color:var(--muted)">Depósito bloqueado (no se reparte)<span>${usd(chosen.deposito)}</span></div>`:''}</div>
-      <div class="rfoot" style="color:#9fd0ff"><b>Reparto del carro:</b> aquí <b>Elina cuenta completa</b> (ocupa asiento con silla) → 8 asientos: A 4 · B 2,5 · K 1,5. La <b>silla la paga íntegra ${UNITS[0].name}</b>. Precios en USD.</div>`;
-  }else{
-    report=`<div class="note luggage" style="margin-bottom:11px"><span class="ic">🚐</span><span>Añade cotizaciones abajo y marca <b>una como elegida</b> para ver el reparto por núcleo. <b>Elina cuenta completa</b> (ocupa asiento) → A 4 · B 2,5 · K 1,5 de 8; la <b>silla la paga la familia de ${UNITS[0].short}</b>. Todo en USD.</span></div>`;
-  }
+  const report=renderReservaCarro();
   let best=Infinity,bestId=null;
   quotes.forEach(q=>{const t=(q.precio||0)+(q.carseat||0);if(t>0&&t<best){best=t;bestId=q.id;}});
   const cards=quotes.slice().sort((a,b)=>((b.elegida?1:0)-(a.elegida?1:0))||(((a.precio||0)+(a.carseat||0))-((b.precio||0)+(b.carseat||0)))).map(q=>{
@@ -848,8 +1053,10 @@ function renderCarro(){
     </div>`;
   }).join('');
   const transChips=`<div class="gchip paychip ${cTrans==='manual'?'on':''}" style="--c:#38bdf8" data-ctrans="manual">Manual</div><div class="gchip paychip ${cTrans==='automático'?'on':''}" style="--c:#38bdf8" data-ctrans="automático">Automático</div>`;
-  return report+`<div class="sectionlbl">Cotizaciones (${quotes.length})</div>
-    ${cards||'<div style="color:var(--muted);font-size:12px;padding:2px 4px 12px">Aún no hay cotizaciones. Añade la primera abajo 👇</div>'}
+  return report+`<details class="fold"><summary>🔎 Otras cotizaciones que miramos (${quotes.length})</summary>
+    <div style="padding:12px 13px 4px">
+    <div class="rfoot" style="margin-top:0">Histórico de la búsqueda. La van <b>ya está reservada</b> arriba, así que esto es solo referencia.</div>
+    ${cards||'<div style="color:var(--muted);font-size:12px;padding:2px 4px 12px">No quedó ninguna cotización guardada.</div>'}
     <div class="gform" style="margin-top:6px">
       <div><label>Proveedor</label><input type="text" id="cProv" placeholder="Locauto, Sicily by Car, Noleggiare…"></div>
       <div><label>Canal / dónde se cotizó</label><input type="text" id="cCanal" placeholder="DiscoverCars, AutoEurope, web directa…"></div>
@@ -868,12 +1075,14 @@ function renderCarro(){
       <div><label>Notas (opcional)</label><input type="text" id="cNotas" placeholder="Automático, combustible lleno-lleno, condiciones…"></div>
       <button class="gadd" id="cAddBtn">+ Añadir cotización</button>
     </div>
-    <div class="gnote"><b>🔄 Sincronizado en vivo con la familia.</b> Todos ven las mismas cotizaciones al instante. El respaldo de abajo es solo por si acaso (uso offline).
+    <div class="gnote"><b>🔄 Sincronizado en vivo con la familia.</b> El respaldo de abajo es solo por si acaso (uso offline).
       <textarea id="cJson" readonly>${JSON.stringify(quotes)}</textarea>
-      <div class="gbtns"><button id="cCopy">📋 Copiar respaldo</button><button id="cLoad">📥 Cargar pegado</button></div></div>`;
+      <div class="gbtns"><button id="cCopy">📋 Copiar respaldo</button><button id="cLoad">📥 Cargar pegado</button></div></div>
+    </div></details>`;
 }
 function bindCarro(){
   const body=document.getElementById('panelBody');
+  body.querySelectorAll('[data-copy]').forEach(el=>el.onclick=()=>copyTxt(el.dataset.copy,'Copiado: '+el.dataset.copy));
   body.querySelectorAll('[data-ctrans]').forEach(el=>el.onclick=()=>{cTrans=el.dataset.ctrans;body.querySelectorAll('[data-ctrans]').forEach(x=>x.classList.toggle('on',x.dataset.ctrans===cTrans));});
   body.querySelectorAll('[data-ctog]').forEach(el=>el.onclick=()=>{const k=el.dataset.ctog;if(k==='seg')cSeg=!cSeg;else if(k==='km')cKm=!cKm;else cCancel=!cCancel;el.classList.toggle('on');});
   body.querySelectorAll('[data-cdel]').forEach(el=>el.onclick=()=>{if(confirm('¿Eliminar esta cotización?')){const id=el.dataset.cdel;quotes=quotes.filter(q=>q.id!==id);saveC();renderPanel();sbDel('cotizaciones_carro',id);}});
@@ -887,15 +1096,15 @@ function bindCarro(){
     const prov=document.getElementById('cProv').value.trim();
     const modelo=document.getElementById('cModelo').value.trim();
     const precio=carNum('cPrecio');
-    if(!precio||precio<=0){alert('Pon el precio total del alquiler (USD).');return;}
-    if(!prov&&!modelo){alert('Pon al menos el proveedor o el modelo.');return;}
+    if(!precio||precio<=0){toast('Pon el precio total del alquiler (USD).',true);return;}
+    if(!prov&&!modelo){toast('Pon al menos el proveedor o el modelo.',true);return;}
     const q={id:'c'+Date.now()+Math.floor(Math.random()*1000),proveedor:prov,canal:document.getElementById('cCanal').value.trim(),modelo,transmision:cTrans,precio,seguro:cSeg,deposito:carNum('cDep'),carseat:carNum('cSeat'),kmilim:cKm,cancela:cCancel,url:document.getElementById('cUrl').value.trim(),notas:document.getElementById('cNotas').value.trim(),elegida:quotes.length===0};
     quotes.push(q);saveC();renderPanel();body.scrollTop=0;sbIns('cotizaciones_carro',cToRow(q));
   };
   const copy=document.getElementById('cCopy');
   if(copy)copy.onclick=()=>{const ta=document.getElementById('cJson');ta.select();const done=()=>{copy.textContent='✓ Copiado';setTimeout(()=>copy.textContent='📋 Copiar respaldo',1500);};if(navigator.clipboard){navigator.clipboard.writeText(ta.value).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}};
   const load=document.getElementById('cLoad');
-  if(load)load.onclick=()=>{const t=prompt('Pega aquí el respaldo (JSON) de cotizaciones:');if(!t)return;try{const arr=JSON.parse(t);if(Array.isArray(arr)){quotes=arr;saveC();renderPanel();}else alert('Formato no válido.');}catch(e){alert('No se pudo leer el JSON.');}};
+  if(load)load.onclick=()=>{const t=prompt('Pega aquí el respaldo (JSON) de cotizaciones:');if(!t)return;try{const arr=JSON.parse(t);if(Array.isArray(arr)){quotes=arr;saveC();renderPanel();}else toast('Formato no válido.',true);}catch(e){toast('No se pudo leer el JSON.',true);}};
 }
 
 /* ============ Supabase (sync en vivo gastos + casas) ============ */
@@ -953,7 +1162,7 @@ function sbSubscribe(){
       .subscribe();
   }catch(e){}
 }
-async function sbIns(table,row){ if(!sb||!sbReady) return; try{const {error}=await sb.from(table).insert(row);if(error){console.warn('insert',table,error);alert('No se pudo guardar en la nube. Se guardó solo en este dispositivo.');}}catch(e){} }
+async function sbIns(table,row){ if(!sb||!sbReady) return; try{const {error}=await sb.from(table).insert(row);if(error){console.warn('insert',table,error);toast('No se pudo guardar en la nube. Se guardó solo en este dispositivo.',true);}}catch(e){} }
 async function sbDel(table,id){ if(!sb||!sbReady) return; try{await sb.from(table).delete().eq('id',id);}catch(e){} }
 /* Sincroniza la marca `elegida` de todas las casas de una base (una elegida por base). Silencioso si la columna aún no existe. */
 async function sbSetElegida(base){ if(!sb||!sbReady) return; try{ await Promise.all(stays.filter(s=>s.base===base).map(s=>sb.from('alojamientos').update({elegida:!!s.elegida}).eq('id',s.id))); }catch(e){} }
@@ -992,7 +1201,15 @@ const map=L.map('map',{zoomControl:true}).setView([37.9,13.9],8);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; OpenStreetMap &copy; CARTO',maxZoom:19}).addTo(map);
 const layerRoute=L.layerGroup().addTo(map),layerSpur=L.layerGroup().addTo(map),layerTime=L.layerGroup().addTo(map),layerPoi=L.layerGroup().addTo(map);
 const show={spur:true,sug:true,time:true};
-let view='agenda', agDay=1;
+/* Día de hoy dentro del viaje (-1 si aún no empezó o ya terminó). Marca la píldora y abre ahí. */
+const agHoy=(()=>{
+  try{
+    const h=new Date(),ini=new Date(2026,9,2); /* 2 oct 2026 */
+    const i=Math.round((new Date(h.getFullYear(),h.getMonth(),h.getDate())-ini)/86400000);
+    return (i>=0&&i<DAYS.length)?i:-1;
+  }catch(e){return -1;}
+})();
+let view='agenda', agDay=agHoy>=0?agHoy:0;
 const markers={};
 const sched=(()=>{let day=2,o={};ORDER.forEach(id=>{const n=BASES[id].nights;o[id]={from:day,to:day+n-1,n};day+=n;});return o;})();
 function mid(a,b){return[(POI[a].lat+POI[b].lat)/2,(POI[a].lng+POI[b].lng)/2];}
@@ -1053,7 +1270,7 @@ function renderMapView(){
   return html;
 }
 function renderAgendaView(){
-  const pills=DAYS.map((d,i)=>`<div class="pill ${i===agDay?'on':''}" data-day="${i}"><span class="pd ${d.load[0]}"></span>${d.d.replace(' oct','')}</div>`).join('');
+  const pills=DAYS.map((d,i)=>`<div class="pill ${i===agDay?'on':''}" data-day="${i}"><span class="pd ${d.load[0]}"></span>${i===agHoy?'<b style="color:#4ade80;margin-right:1px">HOY·</b>':''}${d.d.replace(' oct','')}</div>`).join('');
   const day=DAYS[agDay];
   const shown=new Set();
   const rows=day.items.map(it=>{
@@ -1072,22 +1289,30 @@ function renderAgendaView(){
   return `<div class="pills">${pills}</div>
     <div class="ddhd"><div><div class="ddt">${day.d}</div><div class="ddb">${day.bs}</div></div>
       <span class="sp"></span><span class="loadpill load-${day.load[0]}">${day.load[1]}</span></div>
+    <div class="swipehint"><span>👈 desliza para cambiar de día 👉</span></div>
     ${resv}${rows}
     <div class="ddnav"><button id="dprev" ${agDay===0?'disabled':''}>← Día anterior</button><button id="dnext" ${agDay===DAYS.length-1?'disabled':''}>Día siguiente →</button></div>`;
+}
+/* Centra la píldora activa dentro de su tira horizontal (sin arrastrar la página). */
+function centerActivePill(){
+  const on=document.querySelector('#panelBody .pill.on');if(!on)return;
+  const strip=on.parentElement;if(!strip)return;
+  strip.scrollTo({left:Math.max(0,on.offsetLeft-(strip.clientWidth-on.offsetWidth)/2),behavior:'smooth'});
 }
 function renderPanel(){
   const body=document.getElementById('panelBody');
   if(view==='gastos'){body.innerHTML=renderGastos();bindGastos();return;}
-  if(view==='stay'){body.innerHTML=renderStays();bindStays();return;}
+  if(view==='stay'){body.innerHTML=renderStays();bindStays();centerActivePill();return;}
   if(view==='presupuesto'){body.innerHTML=renderPresupuesto();bindPresupuesto();return;}
   if(view==='carro'){body.innerHTML=renderCarro();bindCarro();return;}
   body.innerHTML = view==='agenda'?renderAgendaView():renderMapView();
   body.querySelectorAll('[data-poi]').forEach(el=>el.addEventListener('click',e=>{e.stopPropagation();flyTo(el.getAttribute('data-poi'));if(window.innerWidth<=820)closeSheet();}));
   if(view==='agenda'){
-    body.querySelectorAll('.pill').forEach(el=>el.onclick=()=>{agDay=+el.dataset.day;renderPanel();body.scrollTop=0;});
+    body.querySelectorAll('.pill').forEach(el=>el.onclick=()=>{const n=+el.dataset.day;const dir=n>agDay?1:-1;agDay=n;animateSwipe(dir);renderPanel();body.scrollTop=0;});
     const pv=document.getElementById('dprev'),nx=document.getElementById('dnext');
-    if(pv)pv.onclick=()=>{if(agDay>0){agDay--;renderPanel();body.scrollTop=0;}};
-    if(nx)nx.onclick=()=>{if(agDay<DAYS.length-1){agDay++;renderPanel();body.scrollTop=0;}};
+    if(pv)pv.onclick=()=>goStep(-1);
+    if(nx)nx.onclick=()=>goStep(1);
+    centerActivePill();
   }else{
     document.getElementById('tgSpur').onchange=e=>{show.spur=e.target.checked;drawMap();};
     document.getElementById('tgSug').onchange=e=>{show.sug=e.target.checked;drawMap();};
@@ -1099,19 +1324,145 @@ document.getElementById('legend').innerHTML=
   +`<div class="row"><span class="dot" style="background:#e9b949"></span>Agrigento (parada)</div>`
   +`<div class="row" style="margin-top:6px;border-top:1px solid #223049;padding-top:7px"><span class="ln"></span>Traslado en van</div>`
   +`<div class="row"><span class="ln dash"></span>Excursión de día</div>`;
-document.getElementById('seg').addEventListener('click',e=>{
-  const btn=e.target.closest('button');if(!btn)return;
-  view=btn.dataset.view;
-  document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b===btn));
-  renderPanel();
-});
+/* ============ Navegación y gestos ============ */
+const VIEWS=['agenda','map','stay','gastos','presupuesto','carro'];
 const panel=document.getElementById('panel');
-function closeSheet(){panel.classList.remove('open');setTimeout(()=>map.invalidateSize(),320);}
-document.getElementById('sheetHandle').addEventListener('click',()=>{panel.classList.toggle('open');setTimeout(()=>map.invalidateSize(),320);});
-window.addEventListener('resize',()=>map.invalidateSize());
+const pbody=document.getElementById('panelBody');
+const phead=document.getElementById('panelHead');
+const handle=document.getElementById('sheetHandle');
+const isMobile=()=>window.matchMedia('(max-width:820px)').matches;
+
+/* ---- Hoja deslizable con tres posiciones: completa / media / asomada ---- */
+let snapPx={full:0,half:0,peek:0}, snapName='full';
+function measureSheet(){
+  const H=panel.getBoundingClientRect().height||1;
+  const peekH=(handle.offsetHeight||0)+(phead.offsetHeight||0);
+  snapPx={full:0,half:Math.max(0,Math.round(H*0.46)),peek:Math.max(0,Math.round(H-peekH))};
+}
+function setTy(px){panel.style.setProperty('--ty',px+'px');}
+function snapTo(name,quiet){
+  if(!isMobile())return;
+  measureSheet();
+  snapName=snapPx[name]!==undefined?name:'full';
+  setTy(snapPx[snapName]);
+  if(!quiet)setTimeout(()=>map.invalidateSize(),340);
+}
+function closeSheet(){snapTo('peek');}
+
+let drag=null,justDragged=0;
+function dragEnd(){
+  if(!drag)return;const d=drag;drag=null;panel.classList.remove('dragging');
+  if(!d.active)return;
+  justDragged=Date.now();
+  let bestN=snapName,bestD=Infinity;
+  for(const k in snapPx){const dd=Math.abs(snapPx[k]-d.cur);if(dd<bestD){bestD=dd;bestN=k;}}
+  snapTo(bestN);
+}
+function attachDrag(el,fromBody){
+  el.addEventListener('touchstart',e=>{
+    if(!isMobile()||e.touches.length!==1||drag)return;
+    if(fromBody&&e.target.closest('input,textarea,select'))return;
+    measureSheet();
+    const t=e.touches[0];
+    drag={y0:t.clientY,x0:t.clientX,ty0:snapPx[snapName],cur:snapPx[snapName],fromBody:!!fromBody,active:false};
+  },{passive:true});
+  el.addEventListener('touchmove',e=>{
+    if(!drag||e.touches.length!==1)return;
+    const t=e.touches[0],dy=t.clientY-drag.y0,dx=t.clientX-drag.x0;
+    if(!drag.active){
+      if(Math.abs(dy)<9)return;
+      if(Math.abs(dx)>Math.abs(dy)){drag=null;return;}            /* horizontal → lo maneja el swipe */
+      if(drag.fromBody&&(dy<0||pbody.scrollTop>0)){drag=null;return;} /* dentro del contenido solo cierra tirando desde arriba */
+      drag.active=true;panel.classList.add('dragging');
+    }
+    e.preventDefault();
+    drag.cur=Math.max(-26,Math.min(snapPx.peek+70,drag.ty0+dy));
+    setTy(drag.cur);
+  },{passive:false});
+  el.addEventListener('touchend',dragEnd);
+  el.addEventListener('touchcancel',dragEnd);
+}
+attachDrag(handle,false);attachDrag(phead,false);attachDrag(pbody,true);
+handle.addEventListener('click',()=>{
+  if(Date.now()-justDragged<400)return;
+  snapTo(snapName==='full'?'peek':'full');
+});
+
+/* ---- Cambiar de sección (barra inferior en móvil, segmentos en escritorio) ---- */
+function animateSwipe(dir){
+  if(!dir)return;
+  pbody.classList.remove('swipe-l','swipe-r');void pbody.offsetWidth;
+  pbody.classList.add(dir>0?'swipe-l':'swipe-r');
+}
+function setView(v,dir){
+  if(!VIEWS.includes(v)||v===view)return;
+  view=v;
+  document.querySelectorAll('#seg button,#tabbar .tab').forEach(b=>b.classList.toggle('on',b.dataset.view===v));
+  animateSwipe(dir);
+  renderPanel();pbody.scrollTop=0;
+  if(isMobile()){
+    if(v==='map'&&snapName==='full')snapTo('half');
+    else if(v!=='map'&&snapName!=='full')snapTo('full');
+  }
+  if(v==='map')setTimeout(()=>{map.invalidateSize();fitAll();},380);
+}
+document.getElementById('seg').addEventListener('click',e=>{const b=e.target.closest('button');if(b)setView(b.dataset.view);});
+document.getElementById('tabbar').addEventListener('click',e=>{
+  const b=e.target.closest('.tab');if(!b)return;
+  if(b.dataset.view===view&&isMobile()){snapTo(snapName==='full'?'peek':'full');return;} /* segundo toque: mostrar/ocultar */
+  setView(b.dataset.view);
+});
+
+/* ---- Deslizar con el dedo: en Agenda cambia de día, en el resto de sección ---- */
+function goStep(dir){
+  if(view==='agenda'){
+    const n=agDay+dir;
+    if(n<0||n>DAYS.length-1){nudge(dir);return;}
+    agDay=n;animateSwipe(dir);renderPanel();pbody.scrollTop=0;
+  }else{
+    const i=VIEWS.indexOf(view)+dir;
+    if(i<0||i>VIEWS.length-1){nudge(dir);return;}
+    setView(VIEWS[i],dir);
+  }
+}
+function nudge(dir){ /* rebote suave al llegar al extremo */
+  pbody.animate?pbody.animate([{transform:'none'},{transform:`translateX(${dir>0?-14:14}px)`},{transform:'none'}],{duration:220,easing:'ease-out'}):null;
+}
+let sw=null;
+pbody.addEventListener('touchstart',e=>{
+  if(e.touches.length!==1){sw=null;return;}
+  if(e.target.closest('input,textarea,select,.pills,.seg,.gnote,a')){sw=null;return;}
+  const t=e.touches[0];sw={x:t.clientX,y:t.clientY,t:Date.now()};
+},{passive:true});
+pbody.addEventListener('touchend',e=>{
+  if(!sw||drag&&drag.active)return;
+  const t=e.changedTouches[0],dx=t.clientX-sw.x,dy=t.clientY-sw.y;
+  const fast=Date.now()-sw.t<700;
+  if(fast&&Math.abs(dx)>62&&Math.abs(dx)>Math.abs(dy)*1.7)goStep(dx<0?1:-1);
+  sw=null;
+},{passive:true});
+/* Teclado en escritorio: flechas para moverse igual que el dedo */
+window.addEventListener('keydown',e=>{
+  if(e.target.matches('input,textarea,select'))return;
+  if(e.key==='ArrowRight')goStep(1);else if(e.key==='ArrowLeft')goStep(-1);
+});
+
+/* ---- El mapa manda: tocarlo deja la hoja asomada ---- */
+map.on('click',()=>{if(isMobile()&&view==='map'&&snapName!=='peek')snapTo('peek');});
+map.on('dragstart',()=>{if(isMobile()&&view==='map'&&snapName==='full')snapTo('half');});
+
+window.addEventListener('resize',()=>{measureSheet();if(isMobile())setTy(snapPx[snapName]);map.invalidateSize();});
+window.addEventListener('orientationchange',()=>setTimeout(()=>{measureSheet();if(isMobile())setTy(snapPx[snapName]);map.invalidateSize();},300));
+
+/* Encuadra Sicilia en la parte del mapa que NO tapa la hoja. */
+function fitAll(){
+  const b=L.latLngBounds(Object.values(POI).map(p=>[p.lat,p.lng]));
+  if(!isMobile()){map.fitBounds(b,{padding:[36,36]});return;}
+  const tapado=Math.max(0,window.innerHeight-panel.getBoundingClientRect().top);
+  map.fitBounds(b,{paddingTopLeft:[26,26],paddingBottomRight:[26,Math.min(tapado+12,window.innerHeight*0.66)]});
+}
 drawMap();renderPanel();
-map.fitBounds(L.latLngBounds(Object.values(POI).map(p=>[p.lat,p.lng])).pad(0.12));
-setTimeout(()=>map.invalidateSize(),200);
+setTimeout(()=>{measureSheet();snapTo('full',true);map.invalidateSize();fitAll();},220);
 sbSubscribe();sbLoad();loadFX();
 </script>
 </body>
