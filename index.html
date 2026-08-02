@@ -323,6 +323,41 @@
   .valert{display:flex;gap:9px;align-items:flex-start;background:rgba(233,185,73,.09);border:1px solid rgba(233,185,73,.32);color:#f0dca6;border-radius:12px;padding:11px 12px;font-size:12px;line-height:1.5;margin-bottom:10px}
   .vspecs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px}
   @media(max-width:520px){.vleg{grid-template-columns:1fr}.vcode{flex:1 1 100%}}
+  /* ===== Libro de cuentas ===== */
+  .mv{background:var(--panel2);border:1px solid var(--line);border-radius:11px;overflow:hidden}
+  .mv.auto{border-left:3px solid var(--accent)}
+  .mv>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 11px}
+  .mv>summary::-webkit-details-marker{display:none}
+  .mvic{font-size:17px;flex:none;width:22px;text-align:center}
+  .mvinfo{flex:1;min-width:0;display:flex;flex-direction:column}
+  .mvd{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mvm{font-size:10.5px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mva{font-size:14px;font-weight:800;white-space:nowrap;flex:none}
+  .mvbody{padding:2px 11px 12px;border-top:1px solid var(--line)}
+  .mvusd{font-size:11px;color:var(--muted);line-height:1.45;margin:8px 0 0}
+  .mvsplit{display:flex;gap:7px;margin-top:9px}
+  .mvsplit .rsp{flex:1}
+  .mvdel{width:100%;margin-top:10px;border:1px solid rgba(251,113,133,.35);background:transparent;color:#fda4af;border-radius:9px;padding:10px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer}
+  /* Pendientes de efectivo */
+  .pendbox{background:rgba(233,185,73,.07);border:1px solid rgba(233,185,73,.3);border-radius:13px;padding:10px 11px}
+  .pendrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-bottom:1px dashed rgba(233,185,73,.22)}
+  .pendrow:last-of-type{border-bottom:0}
+  .pendrow .pi{font-size:17px;flex:none;width:22px;text-align:center}
+  .pendrow .pinfo{flex:1;min-width:120px;display:flex;flex-direction:column}
+  .pendrow .pd{font-size:12.5px;font-weight:700}
+  .pendrow .pm{font-size:10.5px;color:var(--muted);margin-top:2px}
+  .pendrow .pa{font-size:14px;font-weight:800;color:#f0dca6;white-space:nowrap}
+  .pbtn{flex:none;border:1px solid rgba(233,185,73,.5);background:rgba(233,185,73,.12);color:#f0dca6;border-radius:9px;padding:9px 12px;font-size:12px;font-weight:800;font-family:inherit;cursor:pointer}
+  @media(max-width:520px){.pbtn{flex:1 0 100%;padding:12px}}
+  /* Matriz de transparencia */
+  .mtx{width:100%;border-collapse:collapse;font-size:12px;min-width:290px}
+  .mtx th,.mtx td{padding:9px 7px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+  .mtx thead th{color:var(--muted);font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;font-weight:800}
+  .mtx th:first-child{text-align:left}
+  .mtx tbody th{color:var(--txt);font-weight:800;font-size:12px}
+  .mtx td.self{color:var(--muted)}
+  .mtx td.tot{font-weight:800;color:var(--accent)}
+  .gcancel{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:10px;padding:11px;font-size:12.5px;font-weight:700;font-family:inherit;cursor:pointer}
 </style>
 </head>
 <body>
@@ -339,7 +374,7 @@
         <button data-view="agenda" class="on">📅 Agenda</button>
         <button data-view="map">🗺️ Bases</button>
         <button data-view="stay">🏠 Casas</button>
-        <button data-view="gastos">💶 Gastos</button>
+        <button data-view="gastos">💶 Cuentas</button>
         <button data-view="presupuesto">📊 Hospedaje</button>
         <button data-view="carro">🚐 Carro</button></div>
     </div>
@@ -351,7 +386,7 @@
   <button class="tab on" data-view="agenda"><span class="ti">📅</span>Agenda</button>
   <button class="tab" data-view="map"><span class="ti">🗺️</span>Bases</button>
   <button class="tab" data-view="stay"><span class="ti">🏠</span>Casas</button>
-  <button class="tab" data-view="gastos"><span class="ti">💶</span>Gastos</button>
+  <button class="tab" data-view="gastos"><span class="ti">💶</span>Cuentas</button>
   <button class="tab" data-view="presupuesto"><span class="ti">📊</span>Hosp.</button>
   <button class="tab" data-view="carro"><span class="ti">🚐</span>Carro</button>
 </nav>
@@ -515,12 +550,17 @@ const DAYS=[
 const KIC={flight:'✈️',drive:'🚐',visit:'🏛️',beach:'🏖️',meal:'🍽️',rest:'😎',ferry:'⛴️',wine:'🍇'};
 const RESV={0:'🚐 Van ya reservada (Eurorentcar · conf. ZA1FR-OE9LO). Johan lleva su tarjeta de crédito física: depósito de € 1.600 en garantía. Ver pestaña 🚐 Carro.',7:'🍇 Reservar la cata del viñedo del Etna con antelación.',11:'⛴️ Reservar el ferry a Favignana (Liberty Lines).',14:'⛽ Devolver la van con el depósito lleno (política lleno→lleno) y hacer fotos del estado antes de entregarla.'};
 
-/* ============ Gastos compartidos ============ */
+/* ============ Cuentas del viaje (libro único) ============
+   Todo el dinero del viaje vive aquí: lo que Johan ya adelantó (hospedajes + van)
+   y lo que cada quien va pagando sobre la marcha. El saldo es siempre la resta
+   entre lo que pusiste y lo que te toca. Moneda de cuenta: € (se paga en €).   */
 const UNITS=[
   {id:'A',name:'Johan & Christel',short:'J&C',color:'#a78bfa'},
   {id:'B',name:'Peter & Sofía',short:'P&S',color:'#fb7185'},
   {id:'K',name:'Klaus',short:'Klaus',color:'#2dd4bf'},
 ];
+/* Regla 1: los gastos de la abuela Pili se parten mitad Johan / mitad Peter.
+   Regla 2: los de la abuela Pilo, mitad Johan / mitad Klaus. (Las dos se llaman María del Pilar.) */
 const PEOPLE=[
   {id:'johan',name:'Johan',w:{A:1}},
   {id:'christel',name:'Christel',w:{A:1}},
@@ -528,25 +568,32 @@ const PEOPLE=[
   {id:'peter',name:'Peter',w:{B:1}},
   {id:'sofia',name:'Sofía',w:{B:1}},
   {id:'klaus',name:'Klaus',w:{K:1}},
-  {id:'pili',name:'Pili · mamá',w:{A:0.5,B:0.5}},
-  {id:'pilo',name:'Pilo · suegra',w:{A:0.5,K:0.5}},
+  {id:'pili',name:'Abuela Pili',w:{A:0.5,B:0.5}},
+  {id:'pilo',name:'Abuela Pilo',w:{A:0.5,K:0.5}},
 ];
+/* Regla 5: Peter y Sofía llegan la noche del sábado 3, así que no pagan el día de van
+   ni la noche de Palermo que no usaron. El resto del grupo entra el 2. */
+const DIA_IN=2, DIA_OUT=15;
+const LLEGA={peter:3,sofia:3};
+const llegaDe=pid=>LLEGA[pid]||DIA_IN;
+
 const GKEY='sicilia_gastos_v1';
 let expenses=[];try{expenses=JSON.parse(localStorage.getItem(GKEY)||'[]');}catch(e){expenses=[];}
 let fPaidBy='A';
 let fCat='normal';
 let fFor=new Set(PEOPLE.map(p=>p.id));
+let gPrefill=null;   /* pendiente de efectivo que se está registrando */
+let gOpenForm=false; /* abrir el formulario al redibujar */
 function saveG(){try{localStorage.setItem(GKEY,JSON.stringify(expenses));}catch(e){}}
 const unitById=id=>UNITS.find(u=>u.id===id);
 function money(n){const v=Math.round(n*100)/100;return '€'+v.toFixed(2);}
-/* ---- USD (solo pestaña Casas) ----
-   Los gastos del viaje (pestaña 💶) van en € porque se pagan en euros en Sicilia.
-   En Casas el precio base lo teclea Johan en USD (lo que le muestra Airbnb) y los
-   extras/tasas vienen en € del anuncio → se convierten con FX (cambio EUR→USD en vivo). */
-let FX=Number(localStorage.getItem('sicilia_fx'))||1.14; /* EUR→USD; respaldo 1.14 si no hay red */
+/* ---- Cambio EUR→USD ----
+   La cuenta se lleva en € (es como se paga en Sicilia). Johan pagó las reservas en USD,
+   así que esos montos se convierten con el cambio del día. */
+let FX=Number(localStorage.getItem('sicilia_fx'))||1.14;
 let FXsrc=localStorage.getItem('sicilia_fx')?'guardado':'aprox.';
 const usd=n=>{const v=Math.round(n*100)/100;return '$'+v.toFixed(2);};
-const eur2usd=e=>e*FX; /* convierte un monto en € a USD */
+const eur2usd=e=>e*FX;
 async function loadFX(){
   const fuentes=[
     ['https://api.frankfurter.dev/v1/latest?base=EUR&symbols=USD',d=>d&&d.rates&&d.rates.USD],
@@ -556,22 +603,100 @@ async function loadFX(){
     try{
       const r=await fetch(u); if(!r.ok) continue;
       const v=pick(await r.json());
-      if(v&&v>0.5&&v<2){ FX=v; FXsrc='en vivo'; try{localStorage.setItem('sicilia_fx',String(v));}catch(e){} if(typeof view!=='undefined'&&view==='stay')renderPanel(); return; }
+      if(v&&v>0.5&&v<2){ FX=v; FXsrc='en vivo'; try{localStorage.setItem('sicilia_fx',String(v));}catch(e){} if(typeof view!=='undefined')renderPanel(); return; }
     }catch(e){}
   }
 }
-/* Peso de consumo por persona según tipo de gasto. Solo Elina varía: ¼ en hospedaje, completo en el resto. */
+
+/* ---- Pesos ----
+   Regla 3: en hospedaje Elina cuenta 0,25 (duerme en la cama de sus papás).
+   Regla 4: en la van Elina ocupa un puesto completo; la silla la paga íntegra Johan. */
 function cw(pid,cat){return (pid==='elina'&&cat==='hospedaje')?0.25:1;}
+/* Fracción del gasto que le corresponde según los días/noches que realmente estuvo. */
+function presencia(pid,cat,base){
+  const ll=llegaDe(pid);
+  if(ll<=DIA_IN)return 1;
+  if(cat==='carro'){const tot=DIA_OUT-DIA_IN;return Math.max(0,DIA_OUT-ll)/tot;}
+  if(cat==='hospedaje'&&base&&sched[base]){
+    const s=sched[base];let pres=0;
+    for(let d=s.from;d<=s.to;d++)if(d>=ll)pres++;
+    return pres/s.n;
+  }
+  return 1;
+}
+const pesoDe=(pid,cat,base)=>cw(pid,cat)*presencia(pid,cat,base);
+/* Reparte un monto entre los núcleos según a quiénes beneficia. Devuelve {A,B,K}. */
+function repartir(amount,cat,base,forWhom){
+  const out={A:0,B:0,K:0};
+  const who=(forWhom&&forWhom.length)?forWhom:PEOPLE.map(p=>p.id);
+  const ws=who.map(pid=>pesoDe(pid,cat,base));
+  const tot=ws.reduce((a,b)=>a+b,0);
+  if(!(tot>0)||!(amount>0))return out;
+  who.forEach((pid,i)=>{
+    const p=PEOPLE.find(x=>x.id===pid);if(!p)return;
+    const share=amount*ws[i]/tot;
+    for(const u in p.w)out[u]+=share*p.w[u];
+  });
+  return out;
+}
+/* Puestos ponderados (para las métricas de la pestaña Casas). */
+const STAYHEADS=PEOPLE.reduce((s,p)=>s+cw(p.id,'hospedaje'),0); /* 7,25 */
+
+/* ---- Movimientos: anticipos automáticos + gastos registrados a mano ---- */
+const CAT_IC={normal:'🎫',hospedaje:'🛏️',carro:'🚐',comida:'🍽️',efectivo:'💵'};
+const usd2eur=u=>u/FX;
+/* Lo que Johan ya pagó por adelantado. Sale solo de las reservas: no se teclea ni se borra. */
+function anticipos(){
+  const out=[];
+  ORDER.forEach(id=>{
+    const s=chosenFor(id);if(!s||!(s.price>0)||!s.reservada)return;
+    out.push({id:'auto_h_'+id,auto:true,icon:'🏠',date:'2026-10-'+String(sched[id].from).padStart(2,'0'),fechaTxt:'entra '+sched[id].from+' oct',
+      desc:'Hospedaje · '+BASES[id].name,amount:usd2eur(s.price),usd:s.price,
+      paidBy:'A',cat:'hospedaje',base:id,forWhom:[],
+      nota:(s.name||'')+' — prepagado con la tarjeta de Johan.'});
+  });
+  out.push({id:'auto_carro',auto:true,icon:'🚐',date:'2026-10-02',fechaTxt:'2 oct',
+    desc:'Van '+CAR.dias+' días (alquiler + cobertura)',amount:usd2eur(CAR.pagado.total),usd:CAR.pagado.total,
+    paidBy:'A',cat:'carro',forWhom:[],
+    nota:CAR.proveedor+' vía '+CAR.canal+' — prepagado con la tarjeta de Johan.'});
+  return out;
+}
+/* En orden cronológico: se lee como el viaje. */
+function movimientos(){
+  return anticipos().concat(expenses.map(e=>({...e,icon:CAT_IC[e.cat]||'🎫',fechaTxt:e.date})))
+    .sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+}
+/* ---- Efectivo que todavía falta pagar allá (sale de las reservas, no se teclea) ---- */
+function pendientes(){
+  const out=[];
+  ORDER.forEach(id=>{
+    const s=chosenFor(id);if(!s||!s.reservada)return;
+    const ng=nightsOf(id);
+    (s.extras||[]).forEach((x,i)=>{
+      if(x.cat==='deposito')return;
+      const c=extraCost(x,ng);if(!(c>0))return;
+      const et=EXTRA_ETQ[x.cat]||{ic:'💶',n:'Extra en efectivo'};
+      out.push({ref:'pend_'+id+'_'+i,icon:et.ic,desc:et.n+' · '+BASES[id].name,
+        cuando:'al llegar, el '+sched[id].from+' oct',eur:c,cat:'hospedaje',base:id,forWhom:[]});
+    });
+  });
+  out.push({ref:'pend_silla',icon:'👶',desc:'Silla de Elina (al recoger la van)',
+    cuando:'2 oct, en el mostrador',eur:CAR.enSitio.eur,cat:'normal',
+    forWhom:['johan','christel','elina'],nota:'Regla 4: la silla la paga la familia de Johan.'});
+  return out.filter(p=>!expenses.some(e=>e.ref===p.ref));
+}
+
+/* ---- Saldos ---- */
 function computeG(){
   const paid={A:0,B:0,K:0},owed={A:0,B:0,K:0};
-  expenses.forEach(e=>{
-    paid[e.paidBy]=(paid[e.paidBy]||0)+e.amount;
-    const who=(e.forWhom&&e.forWhom.length)?e.forWhom:PEOPLE.map(p=>p.id);
-    const tw=who.reduce((s,pid)=>s+cw(pid,e.cat),0);
-    who.forEach(pid=>{const p=PEOPLE.find(x=>x.id===pid);if(!p)return;const share=e.amount*cw(pid,e.cat)/tw;for(const u in p.w)owed[u]+=share*p.w[u];});
+  const matriz={};UNITS.forEach(u=>{matriz[u.id]={A:0,B:0,K:0};});
+  movimientos().forEach(m=>{
+    paid[m.paidBy]=(paid[m.paidBy]||0)+m.amount;
+    const sp=repartir(m.amount,m.cat,m.base,m.forWhom);
+    UNITS.forEach(u=>{owed[u.id]+=sp[u.id];matriz[m.paidBy][u.id]+=sp[u.id];});
   });
   const bal={};UNITS.forEach(u=>bal[u.id]=paid[u.id]-owed[u.id]);
-  return {paid,owed,bal};
+  return {paid,owed,bal,matriz};
 }
 function settleG(bal){
   const debt=[],cred=[];
@@ -580,58 +705,138 @@ function settleG(bal){
   while(i<debt.length&&j<cred.length){const m=Math.min(debt[i].amt,cred[j].amt);r.push({from:debt[i].id,to:cred[j].id,amt:m});debt[i].amt-=m;cred[j].amt-=m;if(debt[i].amt<0.005)i++;if(cred[j].amt<0.005)j++;}
   return r;
 }
+
+/* ---- Pintado ---- */
+function filaMovimiento(m){
+  const sp=repartir(m.amount,m.cat,m.base,m.forWhom);
+  const quien=(m.forWhom&&m.forWhom.length)
+    ? m.forWhom.map(id=>(PEOPLE.find(p=>p.id===id)||{}).name).filter(Boolean).join(', ')
+    : 'los 8';
+  const detalle=UNITS.map(u=>`<div class="rsp" style="--c:${u.color}"><div class="rspn">${u.short}</div><div class="rspv">${money(sp[u.id])}</div></div>`).join('');
+  return `<details class="mv${m.auto?' auto':''}"><summary>
+      <span class="mvic">${m.icon}</span>
+      <span class="mvinfo"><span class="mvd">${m.desc||'(sin nombre)'}</span>
+        <span class="mvm">${m.fechaTxt||''} · pagó <b style="color:${unitById(m.paidBy).color}">${unitById(m.paidBy).short}</b> · para ${quien}</span></span>
+      <span class="mva">${money(m.amount)}</span></summary>
+    <div class="mvbody">
+      ${m.usd?`<div class="mvusd">Se pagó ${usd(m.usd)} con tarjeta · convertido a € con el cambio del día (1 € = ${usd(FX)}).</div>`:''}
+      ${m.nota?`<div class="mvusd">${m.nota}</div>`:''}
+      <div class="mvsplit">${detalle}</div>
+      ${m.auto?'<div class="mvusd">Sale solo de la reserva: si cambia el precio en 🏠 Casas o 🚐 Carro, esto se actualiza.</div>'
+              :`<button class="mvdel" data-del="${m.id}">🗑 Borrar este gasto</button>`}
+    </div></details>`;
+}
 function renderGastos(){
-  const {paid,owed,bal}=computeG();
+  const {paid,owed,bal,matriz}=computeG();
   const cards=UNITS.map(u=>{
-    const v=bal[u.id],cls=v>0.005?'pos':(v<-0.005?'neg':'zero'),lbl=v>0.005?'le deben':(v<-0.005?'debe':'al día');
+    const v=bal[u.id],cls=v>0.005?'pos':(v<-0.005?'neg':'zero');
+    const lbl=v>0.005?'le deben':(v<-0.005?'debe':'al día');
     return `<div class="ucard" style="--c:${u.color}"><div class="uname">${u.name}</div>
       <div class="ubal ${cls}">${cls==='neg'?'-':''}${money(Math.abs(v))}</div><div class="ulbl">${lbl}</div>
-      <div class="upaid">pagó ${money(paid[u.id])} · le toca ${money(owed[u.id])}</div></div>`;
+      <div class="upaid">puso ${money(paid[u.id])} · le toca ${money(owed[u.id])}</div></div>`;
   }).join('');
   const s=settleG(bal);
-  const settleHtml=!expenses.length?'<div class="settle" style="color:var(--muted);font-weight:600">Aún sin gastos</div>':
-    (s.length?s.map(x=>`<div class="settle">${unitById(x.from).short} <span style="color:var(--muted);font-weight:600;margin:0 2px">paga a</span> ${unitById(x.to).short}<span>${money(x.amt)}</span></div>`).join(''):'<div class="settle ok">Todo saldado ✓</div>');
-  const total=expenses.reduce((a,e)=>a+e.amount,0);
+  const settleHtml=s.length
+    ? s.map(x=>`<div class="settle">${unitById(x.from).short} <span style="color:var(--muted);font-weight:600;margin:0 2px">paga a</span> ${unitById(x.to).short}<span>${money(x.amt)}</span></div>`).join('')
+    : '<div class="settle ok">Todo saldado ✓</div>';
+
+  /* Pendientes de efectivo */
+  const pend=pendientes();
+  const pendTot=pend.reduce((t,p)=>t+p.eur,0);
+  const pendHtml=pend.length?`<div class="sectionlbl" style="margin-top:16px">💵 Falta pagar en efectivo allá · ${money(pendTot)}</div>
+    <div class="pendbox">${pend.map(p=>`<div class="pendrow">
+      <span class="pi">${p.icon}</span>
+      <span class="pinfo"><span class="pd">${p.desc}</span><span class="pm">${p.cuando}</span></span>
+      <span class="pa">${money(p.eur)}</span>
+      <button class="pbtn" data-pend="${p.ref}">Ya se pagó</button></div>`).join('')}
+      <div class="stextranote">Esto todavía no cuenta en los saldos. Cuando alguien lo pague, tócalo y queda registrado a su favor.</div></div>`:'';
+
+  /* Formulario */
   const payChips=UNITS.map(u=>`<div class="gchip paychip ${fPaidBy===u.id?'on':''}" style="--c:${u.color}" data-pay="${u.id}">${u.short}</div>`).join('');
   const catChips=`<div class="gchip catchip ${fCat==='normal'?'on':''}" data-cat="normal">🎫 Normal</div><div class="gchip catchip ${fCat==='hospedaje'?'on':''}" data-cat="hospedaje">🛏️ Hospedaje · Elina ¼</div>`;
   const forChips=PEOPLE.map(p=>`<div class="gchip forchip ${fFor.has(p.id)?'on':''}" data-for="${p.id}">${p.name}</div>`).join('');
   const today=new Date().toISOString().slice(0,10);
-  const list=expenses.slice().reverse().map(e=>{
-    const who=(e.forWhom&&e.forWhom.length)?`${e.forWhom.length} pers.`:'todos';
-    return `<div class="erow"><div class="einfo"><div class="edesc">${e.desc||'(sin nombre)'}</div>
-      <div class="emeta">${e.date} · pagó ${unitById(e.paidBy).short} · ${who}${e.cat==='hospedaje'?' · 🛏️':''}</div></div>
-      <div class="eamt">${money(e.amount)}</div><button class="edel" data-del="${e.id}" aria-label="Eliminar">×</button></div>`;
-  }).join('');
-  return `<div class="gsummary">${cards}</div>
-    <div class="settlebox"><div class="st">Cómo saldar cuentas</div>${settleHtml}</div>
-    <details class="fold" ${expenses.length?'':'open'}><summary>➕ Añadir un gasto</summary>
+  const pf=gPrefill||{};
+  const formOpen=(gOpenForm||!expenses.length)?' open':'';
+  const form=`<details class="fold"${formOpen} id="gFold"><summary>➕ Registrar un gasto</summary>
     <div class="gform">
-      <div><label>Descripción</label><input type="text" id="gDesc" placeholder="Cena, gasolina, entradas…"></div>
-      <div><label>Monto (€)</label><input type="text" id="gAmt" inputmode="decimal" placeholder="0,00"></div>
+      ${gPrefill?`<div class="note luggage" style="margin:0 0 4px"><span class="ic">💵</span><span>Registrando <b>${gPrefill.desc}</b>. Solo falta marcar <b>quién lo pagó</b> y darle a añadir.</span></div>`:''}
+      <div><label>¿Qué fue?</label><input type="text" id="gDesc" placeholder="Pizza, parqueo, gasolina, entradas…" value="${(pf.desc||'').replace(/"/g,'&quot;')}"></div>
+      <div><label>¿Cuánto? (€)</label><input type="text" id="gAmt" inputmode="decimal" placeholder="0,00" value="${pf.amount?String(pf.amount).replace('.',','):''}"></div>
+      <div><label>¿Quién lo pagó?</label><div class="chrow">${payChips}</div></div>
+      <div><label>¿Para quién? <span id="gForLbl" style="color:var(--accent)">${fFor.size===PEOPLE.length?'(los 8)':'('+fFor.size+')'}</span></label>
+        <div class="chrow" style="margin-bottom:6px"><div class="gchip" id="gAll">Los 8</div><div class="gchip" id="gAbuelas">Solo abuelas</div><div class="gchip" id="gNone">Ninguno</div></div>
+        <div class="chrow">${forChips}</div></div>
       <div><label>Tipo de gasto</label><div class="chrow">${catChips}</div></div>
-      <div><label>¿Quién pagó?</label><div class="chrow">${payChips}</div></div>
-      <div><label>¿Para quién? <span id="gForLbl" style="color:var(--accent)">${fFor.size===PEOPLE.length?'(todos)':'('+fFor.size+')'}</span></label>
-        <div class="chrow">${forChips}</div>
-        <div class="chrow" style="margin-top:6px"><div class="gchip" id="gAll">Todos</div><div class="gchip" id="gNone">Ninguno</div></div></div>
       <div><label>Fecha</label><input type="date" id="gDate" value="${today}"></div>
-      <button class="gadd" id="gAddBtn">+ Añadir gasto</button>
-    </div></details>
-    <div class="sectionlbl">Gastos (${expenses.length}) · total ${money(total)}</div>
-    <div class="elist">${list||'<div style="color:var(--muted);font-size:12px;padding:4px">Todavía no hay gastos. Añade el primero arriba.</div>'}</div>
-    <details class="fold" style="margin-top:14px"><summary>🔄 Sincronización y respaldo</summary>
-    <div class="gnote" style="margin:0;border:0;border-radius:0"><b>Sincronizado en vivo con la familia.</b> Todos ven los mismos gastos al instante. El respaldo de abajo es solo por si acaso (uso offline).
+      <button class="gadd" id="gAddBtn">${gPrefill?'Registrar el pago':'+ Añadir gasto'}</button>
+      ${gPrefill?'<button class="gcancel" id="gCancel">Cancelar</button>':''}
+    </div></details>`;
+
+  /* Movimientos */
+  const movs=movimientos();
+  const totalMov=movs.reduce((a,m)=>a+m.amount,0);
+  const lista=movs.map(filaMovimiento).join('');
+
+  /* Transparencia: quién ha pagado por quién */
+  const filas=UNITS.map(p=>`<tr><th>${p.short}</th>${UNITS.map(b=>{
+      const v=matriz[p.id][b.id];
+      return `<td class="${p.id===b.id?'self':''}">${v>0.005?money(v):'—'}</td>`;
+    }).join('')}<td class="tot">${money(UNITS.reduce((t,b)=>t+matriz[p.id][b.id],0))}</td></tr>`).join('');
+  const matrizHtml=`<details class="fold"><summary>👀 Quién ha pagado por quién</summary>
+    <div style="padding:4px 13px 12px;overflow-x:auto">
+      <table class="mtx"><thead><tr><th>pagó ↓ · para →</th>${UNITS.map(u=>`<th>${u.short}</th>`).join('')}<th>total</th></tr></thead>
+      <tbody>${filas}</tbody></table>
+      <div class="stextranote">Cada celda es cuánto ha cubierto esa familia del consumo de la otra. La diagonal es lo que cada uno pagó de lo suyo.</div>
+    </div></details>`;
+
+  const reglas=`<details class="fold"><summary>📏 Las reglas del reparto</summary>
+    <ul class="vlist" style="padding:12px 13px">
+      <li><span class="vb">1</span><span>Todo lo de la <b>abuela Pili</b> se parte mitad <b>Johan</b> / mitad <b>Peter</b>.</span></li>
+      <li><span class="vb">2</span><span>Todo lo de la <b>abuela Pilo</b> se parte mitad <b>Johan</b> / mitad <b>Klaus</b>.</span></li>
+      <li><span class="vb">3</span><span>En <b>hospedaje Elina cuenta 0,25</b>: duerme en la cama de Johan y Christel. Los 8 son <b>${STAYHEADS} puestos</b>.</span></li>
+      <li><span class="vb">4</span><span>En la <b>van Elina paga puesto completo</b> (8 asientos) y la <b>silla la paga íntegra la familia de Johan</b>.</span></li>
+      <li><span class="vb">5</span><span><b>Peter y Sofía llegan la noche del 3 de octubre</b>: no pagan el primer día de van ni la noche de Palermo que no durmieron. Esa parte la asumen los demás.</span></li>
+      <li><span class="vb">6</span><span>Las dos abuelas se llaman María del Pilar: <b>Pili</b> es la mamá de Johan y <b>Pilo</b> la suegra.</span></li>
+      <li><span class="vb">€</span><span>La cuenta se lleva en <b>euros</b>, que es como se paga allá. Lo que Johan pagó en dólares se convierte con el cambio del día (1 € = ${usd(FX)}, ${FXsrc}).</span></li>
+    </ul></details>`;
+
+  return `<div class="note luggage" style="margin-bottom:11px"><span class="ic">💶</span><span>Aquí está <b>todo el dinero del viaje</b>: lo que Johan ya adelantó (hospedajes y van) y lo que cada quien va pagando. <b>Cada pizza, parqueo o gasolina que pague Peter o Klaus baja lo que te deben</b>, así no hay que transferir nada desde Europa.</span></div>
+    <div class="gsummary">${cards}</div>
+    <div class="settlebox"><div class="st">Cómo quedamos hoy</div>${settleHtml}</div>
+    ${form}
+    ${pendHtml}
+    <div class="sectionlbl" style="margin-top:16px">Movimientos (${movs.length}) · ${money(totalMov)}</div>
+    <div class="elist">${lista}</div>
+    ${matrizHtml}
+    ${reglas}
+    <details class="fold"><summary>🔄 Sincronización y respaldo</summary>
+    <div class="gnote" style="margin:0;border:0;border-radius:0"><b>Sincronizado en vivo con la familia.</b> Todos ven lo mismo al instante. El respaldo de abajo es solo por si acaso (uso offline).
       <textarea id="gJson" readonly>${JSON.stringify(expenses)}</textarea>
       <div class="gbtns"><button id="gCopy">📋 Copiar respaldo</button><button id="gLoad">📥 Cargar pegado</button></div></div></details>`;
 }
 function bindGastos(){
   const body=document.getElementById('panelBody');
+  gOpenForm=false;
   body.querySelectorAll('[data-pay]').forEach(el=>el.onclick=()=>{fPaidBy=el.dataset.pay;body.querySelectorAll('[data-pay]').forEach(x=>x.classList.toggle('on',x.dataset.pay===fPaidBy));});
   body.querySelectorAll('[data-cat]').forEach(el=>el.onclick=()=>{fCat=el.dataset.cat;body.querySelectorAll('[data-cat]').forEach(x=>x.classList.toggle('on',x.dataset.cat===fCat));});
-  const updLbl=()=>{const l=document.getElementById('gForLbl');if(l)l.textContent=fFor.size===PEOPLE.length?'(todos)':'('+fFor.size+')';};
+  const updLbl=()=>{const l=document.getElementById('gForLbl');if(l)l.textContent=fFor.size===PEOPLE.length?'(los 8)':'('+fFor.size+')';};
+  const pinta=()=>{body.querySelectorAll('[data-for]').forEach(x=>x.classList.toggle('on',fFor.has(x.dataset.for)));updLbl();};
   body.querySelectorAll('[data-for]').forEach(el=>el.onclick=()=>{const id=el.dataset.for;if(fFor.has(id))fFor.delete(id);else fFor.add(id);el.classList.toggle('on');updLbl();});
-  const all=document.getElementById('gAll'),none=document.getElementById('gNone');
-  if(all)all.onclick=()=>{fFor=new Set(PEOPLE.map(p=>p.id));body.querySelectorAll('[data-for]').forEach(x=>x.classList.add('on'));updLbl();};
-  if(none)none.onclick=()=>{fFor=new Set();body.querySelectorAll('[data-for]').forEach(x=>x.classList.remove('on'));updLbl();};
+  const all=document.getElementById('gAll'),none=document.getElementById('gNone'),abus=document.getElementById('gAbuelas');
+  if(all)all.onclick=()=>{fFor=new Set(PEOPLE.map(p=>p.id));pinta();};
+  if(none)none.onclick=()=>{fFor=new Set();pinta();};
+  if(abus)abus.onclick=()=>{fFor=new Set(['pili','pilo']);pinta();};
+  /* Un pendiente de efectivo pasa al formulario ya relleno */
+  body.querySelectorAll('[data-pend]').forEach(el=>el.onclick=()=>{
+    const p=pendientes().find(x=>x.ref===el.dataset.pend);if(!p)return;
+    gPrefill={ref:p.ref,desc:p.desc,amount:p.eur,cat:p.cat,base:p.base,forWhom:p.forWhom||[]};
+    fCat=p.cat;fFor=new Set((p.forWhom&&p.forWhom.length)?p.forWhom:PEOPLE.map(x=>x.id));
+    gOpenForm=true;renderPanel();
+    const f=document.getElementById('gFold');if(f)f.scrollIntoView({block:'center',behavior:'smooth'});
+  });
+  const cancel=document.getElementById('gCancel');
+  if(cancel)cancel.onclick=()=>{gPrefill=null;fFor=new Set(PEOPLE.map(p=>p.id));fCat='normal';renderPanel();};
   const add=document.getElementById('gAddBtn');
   if(add)add.onclick=()=>{
     const desc=document.getElementById('gDesc').value.trim();
@@ -642,19 +847,21 @@ function bindGastos(){
     if(!amt||amt<=0){toast('Pon un monto válido.',true);return;}
     if(fFor.size===0){toast('Elige al menos una persona en «¿Para quién?».',true);return;}
     const forWhom=fFor.size===PEOPLE.length?[]:[...fFor];
-    const ge={id:'e'+Date.now()+Math.floor(Math.random()*1000),date,desc,amount:amt,paidBy:fPaidBy,cat:fCat,forWhom};
-    expenses.push(ge);saveG();renderPanel();sbIns('gastos',gToRow(ge));toast('Gasto añadido ✓');
+    const ge={id:'e'+Date.now()+Math.floor(Math.random()*1000),date,desc,amount:amt,paidBy:fPaidBy,cat:fCat,forWhom,
+      ref:(gPrefill&&gPrefill.ref)||null,base:(gPrefill&&gPrefill.base)||null};
+    expenses.push(ge);gPrefill=null;fFor=new Set(PEOPLE.map(p=>p.id));fCat='normal';
+    saveG();renderPanel();body.scrollTop=0;sbIns('gastos',gToRow(ge));
+    toast('Registrado ✓ · '+unitById(ge.paidBy).short+' puso '+money(ge.amount));
   };
-  body.querySelectorAll('[data-del]').forEach(el=>el.onclick=()=>{if(confirm('¿Eliminar este gasto?')){const did=el.dataset.del;expenses=expenses.filter(e=>e.id!==did);saveG();renderPanel();sbDel('gastos',did);}});
+  body.querySelectorAll('[data-del]').forEach(el=>el.onclick=()=>{if(confirm('¿Borrar este gasto?')){const did=el.dataset.del;expenses=expenses.filter(e=>e.id!==did);saveG();renderPanel();sbDel('gastos',did);}});
   const copy=document.getElementById('gCopy');
-  if(copy)copy.onclick=()=>{const ta=document.getElementById('gJson');ta.select();const done=()=>{copy.textContent='✓ Copiado';setTimeout(()=>copy.textContent='📋 Copiar respaldo',1500);};if(navigator.clipboard){navigator.clipboard.writeText(ta.value).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}};
+  if(copy)copy.onclick=()=>copyTxt(document.getElementById('gJson').value,'Respaldo copiado ✓');
   const load=document.getElementById('gLoad');
   if(load)load.onclick=()=>{const t=prompt('Pega aquí el respaldo (JSON) que te enviaron:');if(!t)return;try{const arr=JSON.parse(t);if(Array.isArray(arr)){expenses=arr;saveG();renderPanel();}else toast('Formato no válido.',true);}catch(e){toast('No se pudo leer el JSON.',true);}};
 }
 
 /* ============ Alojamiento (Casas) ============ */
 const SKEY='sicilia_stays_v1';
-const STAYHEADS=PEOPLE.reduce((s,p)=>s+cw(p.id,'hospedaje'),0); /* 7.25 puestos ponderados */
 const STAY_SEED=[]; /* precarga de opciones (se llena al pegar links); solo aplica en primer uso */
 let stays;{const _r=localStorage.getItem(SKEY);if(_r){try{stays=JSON.parse(_r)||[];}catch(e){stays=[];}}else{stays=STAY_SEED.slice();}}
 let sBase=ORDER[0];
@@ -683,7 +890,6 @@ function depositosTotal(s){return (s.extras||[]).filter(x=>x.cat==='deposito'&&x
 /* Métricas en USD: el precio base ya está en USD; los extras (en €) se convierten con FX. */
 function stayMetrics(s){const ng=nightsOf(s.base);const extra=eur2usd(extrasTotal(s,ng));const total=(s.price||0)+extra;const perNight=total/ng;return{ng,extra,total,perNight,perPP:perNight/STAYHEADS};}
 /* Puestos ponderados por núcleo para hospedaje (A 3.25 / B 2.5 / K 1.5 = 7.25). Mismo reparto que un gasto de hospedaje en la pestaña 💶. */
-function hospHeads(){const h={};UNITS.forEach(u=>h[u.id]=0);PEOPLE.forEach(p=>{const w=cw(p.id,'hospedaje');for(const u in p.w)h[u]=(h[u]||0)+w*p.w[u];});return h;}
 /* Casa que cuenta para el presupuesto de una base: la marcada como elegida; si no hay, la reservada. */
 function chosenFor(base){const l=stays.filter(s=>s.base===base);return l.find(s=>s.elegida)||l.find(s=>s.reservada)||null;}
 function renderStays(){
@@ -862,7 +1068,6 @@ function bindStays(){
 
 /* ============ Presupuesto de hospedaje (proyección) ============ */
 function renderPresupuesto(){
-  const heads=hospHeads(); /* {A:3.25,B:2.5,K:1.5} */
   let baseSum=0,extraSum=0,totalSum=0,depSum=0,nChosen=0;
   const nucleo={};UNITS.forEach(u=>nucleo[u.id]=0);
   const rowsHtml=ORDER.map(id=>{
@@ -877,7 +1082,7 @@ function renderPresupuesto(){
       <button class="rgoto" data-goto="${id}">🏠 Poner precio en ${b.name} →</button></div>`;
     const m=stayMetrics(ch);
     const dep=eur2usd(depositosTotal(ch));
-    const split={};UNITS.forEach(u=>split[u.id]=m.total*heads[u.id]/STAYHEADS);
+    const split=repartir(m.total,'hospedaje',id); /* Elina ¼ + noches realmente usadas */
     baseSum+=ch.price;extraSum+=m.extra;totalSum+=m.total;depSum+=dep;nChosen++;
     UNITS.forEach(u=>nucleo[u.id]+=split[u.id]);
     const extrasRows=(ch.extras||[]).filter(x=>x&&x.cat!=='deposito').map(x=>{
@@ -899,14 +1104,14 @@ function renderPresupuesto(){
   }).join('');
   const ncards=UNITS.map(u=>`<div class="ucard" style="--c:${u.color}"><div class="uname">${u.name}</div>
     <div class="ubal" style="color:#cfe3f5">${usd(nucleo[u.id])}</div><div class="ulbl">le toca en hospedaje</div>
-    <div class="upaid">${heads[u.id]} de ${STAYHEADS} puestos${u.id==='A'?' · Elina ¼':''}</div></div>`).join('');
+    <div class="upaid">${totalSum>0?Math.round(nucleo[u.id]/totalSum*1000)/10:0}% del total${u.id==='A'?' · Elina ¼':''}</div></div>`).join('');
   const totalBox=`<div class="settlebox"><div class="st">Total hospedaje · ${nChosen} de ${ORDER.length} bases reservadas</div>
     <div class="settle">Reservas (Airbnb/Booking · ya pagadas)<span>${usd(baseSum)}</span></div>
-    ${extraSum?`<div class="settle">Tasas turísticas (se pagan en el sitio)<span>${usd(extraSum)}</span></div>`:''}
+    ${extraSum?`<div class="settle">Pagos en efectivo al llegar (tasas y anfitriones)<span>${usd(extraSum)}</span></div>`:''}
     <div class="settle ok">Total a repartir<span>${usd(totalSum)}</span></div>
     ${depSum?`<div class="settle" style="color:var(--muted)">Depósitos reembolsables (no se reparten)<span>${usd(depSum)}</span></div>`:''}</div>
-    <div class="rfoot" style="color:#9fd0ff"><b>💡 Casi todo ya está pagado.</b> Johan adelantó las reservas con su tarjeta; cada núcleo le reembolsa la cifra de arriba. Solo las <b>tasas turísticas</b> se pagan en efectivo al llegar a cada alojamiento y se reparten igual.</div>`;
-  const note=`<div class="note luggage" style="margin-bottom:11px"><span class="ic">📊</span><span>Lo que le toca a cada núcleo en <b>hospedaje</b>, con los <b>valores finales de las facturas</b>, <b>en USD</b>. Reparto por los mismos <b>7,25 puestos</b> que la pestaña 💶 (Elina ¼; Pili y Pilo repartidas). Reservas en USD; tasas en € convertidas (1 € = ${usd(FX)}). Es un desglose aparte: <b>no</b> toca los gastos reales de 💶.</span></div>`;
+    <div class="rfoot" style="color:#9fd0ff"><b>💡 Casi todo ya está pagado.</b> Johan adelantó las reservas con su tarjeta; cada núcleo le reembolsa la cifra de arriba. Lo único que falta es el <b>efectivo al llegar</b> (tasas y el pago al anfitrión de Acireale), que aparece como <b>pendiente en 💶 Cuentas</b> hasta que alguien lo pague.</div>`;
+  const note=`<div class="note luggage" style="margin-bottom:11px"><span class="ic">📊</span><span>Lo que le toca a cada núcleo en <b>hospedaje</b>, con los <b>valores finales de las facturas</b>, <b>en USD</b>. Reparto por los mismos <b>7,25 puestos</b> que la pestaña 💶 (Elina ¼; Pili y Pilo repartidas) y descontando a Peter y Sofía la noche de Palermo que no durmieron. Reservas en USD; tasas en € convertidas (1 € = ${usd(FX)}). Estas reservas <b>ya cuentan</b> en el saldo de 💶 Cuentas.</span></div>`;
   const foot=`<div class="rfoot">Para cambiar una casa, ve a <b>🏠 Casas</b> y toca «📊 Elegir para el presupuesto» en la que quieras. Solo cuenta una por base. Los depósitos se muestran aparte porque se devuelven.</div>`;
   return note+`<div class="gsummary">${ncards}</div>`+totalBox+`<div class="sectionlbl">Desglose por base</div>`+rowsHtml+foot;
 }
@@ -951,18 +1156,17 @@ let quotes;{const _r=localStorage.getItem(CKEY);if(_r){try{quotes=JSON.parse(_r)
 let cTrans='manual', cSeg=true, cKm=true, cCancel=true; /* estado del formulario */
 function saveC(){try{localStorage.setItem(CKEY,JSON.stringify(quotes));}catch(e){}}
 /* Reparto del carro: TODOS ocupan asiento (Elina completa) → A 4 / B 2.5 / K 1.5 = 8 asientos. */
-function carHeads(){const h={};UNITS.forEach(u=>h[u.id]=0);PEOPLE.forEach(p=>{for(const u in p.w)h[u]+=p.w[u];});return h;}
 const carNum=id=>{let raw=(document.getElementById(id).value||'').trim().replace(/[^\d.,]/g,'');if(!raw)return null;const lc=Math.max(raw.lastIndexOf(','),raw.lastIndexOf('.'));if(lc>=0){raw=raw.slice(0,lc).replace(/[.,]/g,'')+'.'+raw.slice(lc+1).replace(/[.,]/g,'');}const n=parseFloat(raw);return isNaN(n)?null:n;};
 /* Bloque de la reserva confirmada: todo sale del voucher (CAR). */
 function renderReservaCarro(){
-  const heads=carHeads(),CH=UNITS.reduce((s,u)=>s+heads[u.id],0); /* 8 asientos */
   const seatUsd=eur2usd(CAR.enSitio.eur);
-  const split={};UNITS.forEach(u=>split[u.id]=CAR.pagado.total*heads[u.id]/CH);
+  /* Elina ocupa asiento completo; Peter y Sofía no pagan el día que no usaron la van. */
+  const split=repartir(CAR.pagado.total,'carro');
   split[UNITS[0].id]+=seatUsd; /* la silla la paga íntegra el núcleo A */
   const totalUsd=CAR.pagado.total+seatUsd;
   const ncards=UNITS.map(u=>`<div class="ucard" style="--c:${u.color}"><div class="uname">${u.name}</div>
     <div class="ubal" style="color:#cfe3f5">${usd(split[u.id])}</div><div class="ulbl">le toca del carro</div>
-    <div class="upaid">${heads[u.id]} de ${CH} asientos${u.id===UNITS[0].id?' + silla':''}</div></div>`).join('');
+    <div class="upaid">${Math.round(split[u.id]/(CAR.pagado.total+seatUsd)*1000)/10}% del total${u.id===UNITS[0].id?' · incluye la silla':''}</div></div>`).join('');
   const specs=CAR.specs.map(s=>`<span class="stspec">${s}</span>`).join('');
   const maps='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(CAR.dir);
   const code=(k,v)=>`<button class="vcode" data-copy="${v}"><span class="vk">${k}</span><span class="vv">${v}</span><span class="vcopy">toca para copiar</span></button>`;
@@ -1003,7 +1207,7 @@ function renderReservaCarro(){
   </div>
   <div class="sectionlbl" style="margin-top:14px">Lo que le toca a cada núcleo</div>
   <div class="gsummary">${ncards}</div>
-  <div class="rfoot" style="color:#9fd0ff"><b>Reparto del carro:</b> aquí <b>Elina cuenta completa</b> (ocupa asiento) → 8 asientos: A 4 · B 2,5 · K 1,5. La <b>silla la paga íntegra ${UNITS[0].name}</b>. Johan ya adelantó ${usd(CAR.pagado.total)} con su tarjeta; los ${money(CAR.enSitio.eur)} de la silla se pagan en el mostrador. Cambio 1 € = ${usd(FX)} (${FXsrc}).</div>
+  <div class="rfoot" style="color:#9fd0ff"><b>Reparto del carro:</b> aquí <b>Elina cuenta completa</b> (ocupa asiento) y <b>Peter y Sofía no pagan el 2 de octubre</b>, que llegan la noche del 3. La <b>silla la paga íntegra ${UNITS[0].name}</b>. Johan ya adelantó ${usd(CAR.pagado.total)} con su tarjeta; los ${money(CAR.enSitio.eur)} de la silla se pagan en el mostrador. Cambio 1 € = ${usd(FX)} (${FXsrc}).</div>
 
   <div class="sectionlbl" style="margin-top:16px">Qué hay que llevar</div>
   <ul class="vlist" style="margin-bottom:14px">
@@ -1114,8 +1318,8 @@ let sb=null;
 try{ if(window.supabase&&window.supabase.createClient) sb=window.supabase.createClient(SB_URL,SB_KEY); }catch(e){ sb=null; }
 const numN=v=>(v===null||v===undefined||v==='')?null:Number(v);
 /* gasto <-> fila tabla gastos */
-const gToRow=e=>({id:e.id,fecha:e.date,descripcion:e.desc||'',monto:e.amount,pago:e.paidBy,tipo:e.cat||'normal',para:(e.forWhom&&e.forWhom.length)?e.forWhom:[]});
-const gFromRow=r=>({id:r.id,date:r.fecha,desc:r.descripcion||'',amount:Number(r.monto),paidBy:r.pago,cat:r.tipo||'normal',forWhom:Array.isArray(r.para)?r.para:[]});
+const gToRow=e=>({id:e.id,fecha:e.date,descripcion:e.desc||'',monto:e.amount,pago:e.paidBy,tipo:e.cat||'normal',para:(e.forWhom&&e.forWhom.length)?e.forWhom:[],ref:e.ref||null});
+const gFromRow=r=>({id:r.id,date:r.fecha,desc:r.descripcion||'',amount:Number(r.monto),paidBy:r.pago,cat:r.tipo||'normal',forWhom:Array.isArray(r.para)?r.para:[],ref:r.ref||null});
 /* casa <-> fila tabla alojamientos */
 const sToRow=s=>({id:s.id,base:s.base,nombre:s.name||'',url:s.url||'',precio:s.price,habitaciones:numN(s.rooms),banos:numN(s.baths),capacidad:numN(s.cap),parqueo:!!s.parking,rating:numN(s.rating),notas:s.notes||'',foto:s.foto||null,extras:Array.isArray(s.extras)?s.extras:[],reservada:!!s.reservada,invite:s.invite||null});
 const sFromRow=r=>({id:r.id,base:r.base,name:r.nombre||'',url:r.url||'',price:Number(r.precio),rooms:numN(r.habitaciones),baths:numN(r.banos),cap:numN(r.capacidad),parking:r.parqueo!==false,rating:numN(r.rating),notes:r.notas||'',foto:r.foto||null,extras:Array.isArray(r.extras)?r.extras:[],reservada:!!r.reservada,invite:r.invite||null,elegida:!!r.elegida});
