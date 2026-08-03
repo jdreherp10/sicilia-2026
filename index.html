@@ -346,6 +346,23 @@
   .mtx tbody th{color:var(--txt);font-weight:800;font-size:12px}
   .mtx td.self{color:var(--muted)}
   .mtx td.tot{font-weight:800;color:var(--accent)}
+  /* Firma ligera */
+  .yobar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:9px 12px;margin-bottom:11px;font-size:12px;color:var(--muted)}
+  .yobar span{flex:1;min-width:150px;line-height:1.4}
+  .yobar b{color:var(--txt)}
+  .yobar button{flex:none;border:1px solid var(--line);background:var(--bg);color:var(--accent);border-radius:9px;padding:8px 12px;font-size:11.5px;font-weight:800;font-family:inherit;cursor:pointer}
+  #whoami{position:fixed;inset:0;z-index:4000;background:rgba(4,8,16,.78);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;padding:22px}
+  #whoami.on{display:flex}
+  #whoami .mbox{width:100%;max-width:360px;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+  #whoami .mtitle{font-size:19px;font-weight:800}
+  #whoami .msub{font-size:12.5px;color:var(--muted);line-height:1.5;margin:7px 0 16px}
+  #whoami .mopt{display:block;width:100%;margin-bottom:9px;border:1px solid var(--line);border-left:4px solid var(--c);background:var(--panel2);color:var(--txt);border-radius:12px;padding:15px 14px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;text-align:left}
+  #whoami .mopt:active{transform:scale(.98)}
+  /* Movimientos anulados */
+  .mv.void{opacity:.6;border-style:dashed}
+  .mv.void .mvd,.mv.void .mva{text-decoration:line-through;color:var(--muted)}
+  .voidtag{font-size:8.5px;font-weight:800;color:#08111f;background:#fb7185;border-radius:5px;padding:2px 5px;margin-left:6px;vertical-align:middle;letter-spacing:.03em}
+  .mvundo{width:100%;margin-top:10px;border:1px solid rgba(56,189,248,.35);background:transparent;color:var(--accent);border-radius:9px;padding:10px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer}
   .gcancel{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:10px;padding:11px;font-size:12.5px;font-weight:700;font-family:inherit;cursor:pointer}
 </style>
 </head>
@@ -379,6 +396,15 @@
   <button class="tab" data-view="presupuesto"><span class="ti">📊</span>Hosp.</button>
   <button class="tab" data-view="carro"><span class="ti">🚐</span>Carro</button>
 </nav>
+<div id="whoami" role="dialog" aria-modal="true" aria-label="¿Quién eres?">
+  <div class="mbox">
+    <div class="mtitle">👋 ¿Quién eres?</div>
+    <div class="msub">Para firmar lo que registres en las cuentas. No es una contraseña: se guarda solo en este teléfono y lo puedes cambiar cuando quieras.</div>
+    <button class="mopt" data-yo="A" style="--c:#a78bfa">Johan &amp; Christel</button>
+    <button class="mopt" data-yo="B" style="--c:#fb7185">Peter &amp; Sofía</button>
+    <button class="mopt" data-yo="K" style="--c:#2dd4bf">Klaus</button>
+  </div>
+</div>
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -566,9 +592,24 @@ const DIA_IN=2, DIA_OUT=15;
 const LLEGA={peter:3,sofia:3};
 const llegaDe=pid=>LLEGA[pid]||DIA_IN;
 
+/* ---- Firma ligera ----
+   Cada quien dice una vez quién es y todo lo que registre queda firmado.
+   No es una contraseña: es para que se sepa quién anotó cada cosa y no haya dudas. */
+const YKEY='sicilia_yo';
+let yo=null;try{yo=localStorage.getItem(YKEY);}catch(e){}
+if(yo&&!UNITS.some(u=>u.id===yo))yo=null;
+function showWho(){const m=document.getElementById('whoami');if(m)m.classList.add('on');}
+function hideWho(){const m=document.getElementById('whoami');if(m)m.classList.remove('on');}
+function pintaQuien(){if(yo)hideWho();else showWho();}
+function setYo(id){
+  yo=id;try{localStorage.setItem(YKEY,id);}catch(e){}
+  fPaidBy=id;hideWho();renderPanel();
+  toast('Listo: eres '+unitById(id).name);
+}
+
 const GKEY='sicilia_gastos_v1';
 let expenses=[];try{expenses=JSON.parse(localStorage.getItem(GKEY)||'[]');}catch(e){expenses=[];}
-let fPaidBy='A';
+let fPaidBy=yo||'A';
 let fCat='normal';
 let fFor=new Set(PEOPLE.map(p=>p.id));
 let gPrefill=null;   /* pendiente de efectivo que se está registrando */
@@ -672,14 +713,14 @@ function pendientes(){
   out.push({ref:'pend_silla',icon:'👶',desc:'Silla de Elina (al recoger la van)',
     cuando:'2 oct, en el mostrador',eur:CAR.enSitio.eur,cat:'normal',
     forWhom:['johan','christel','elina'],nota:'Regla 4: la silla la paga la familia de Johan.'});
-  return out.filter(p=>!expenses.some(e=>e.ref===p.ref));
+  return out.filter(p=>!expenses.some(e=>e.ref===p.ref&&!e.anulado));
 }
 
 /* ---- Saldos ---- */
 function computeG(){
   const paid={A:0,B:0,K:0},owed={A:0,B:0,K:0};
   const matriz={};UNITS.forEach(u=>{matriz[u.id]={A:0,B:0,K:0};});
-  movimientos().forEach(m=>{
+  movimientos().filter(m=>!m.anulado).forEach(m=>{
     paid[m.paidBy]=(paid[m.paidBy]||0)+m.amount;
     const sp=repartir(m.amount,m.cat,m.base,m.forWhom);
     UNITS.forEach(u=>{owed[u.id]+=sp[u.id];matriz[m.paidBy][u.id]+=sp[u.id];});
@@ -702,17 +743,21 @@ function filaMovimiento(m){
     ? m.forWhom.map(id=>(PEOPLE.find(p=>p.id===id)||{}).name).filter(Boolean).join(', ')
     : 'los 8';
   const detalle=UNITS.map(u=>`<div class="rsp" style="--c:${u.color}"><div class="rspn">${u.short}</div><div class="rspv">${money(sp[u.id])}</div></div>`).join('');
-  return `<details class="mv${m.auto?' auto':''}"><summary>
-      <span class="mvic">${m.icon}</span>
-      <span class="mvinfo"><span class="mvd">${m.desc||'(sin nombre)'}</span>
-        <span class="mvm">${m.fechaTxt||''} · pagó <b style="color:${unitById(m.paidBy).color}">${unitById(m.paidBy).short}</b> · para ${quien}</span></span>
+  const firma=m.auto?'automático'
+    :(m.por?'lo registró '+unitById(m.por).short:'sin firmar');
+  return `<details class="mv${m.auto?' auto':''}${m.anulado?' void':''}"><summary>
+      <span class="mvic">${m.anulado?'🚫':m.icon}</span>
+      <span class="mvinfo"><span class="mvd">${m.desc||'(sin nombre)'}${m.anulado?'<span class="voidtag">ANULADO</span>':''}</span>
+        <span class="mvm">${m.fechaTxt||''} · pagó <b style="color:${unitById(m.paidBy).color}">${unitById(m.paidBy).short}</b> · para ${quien} · ${firma}</span></span>
       <span class="mva">${money(m.amount)}</span></summary>
     <div class="mvbody">
+      ${m.anulado?`<div class="mvusd">🚫 Anulado${m.anuladoPor?' por '+unitById(m.anuladoPor).short:''}: no cuenta en los saldos, pero se queda aquí para que quede constancia.</div>`:''}
       ${m.usd?`<div class="mvusd">Se pagó ${usd(m.usd)} con tarjeta · convertido a € con el cambio del día (1 € = ${usd(FX)}).</div>`:''}
       ${m.nota?`<div class="mvusd">${m.nota}</div>`:''}
-      <div class="mvsplit">${detalle}</div>
+      ${m.anulado?'':`<div class="mvsplit">${detalle}</div>`}
       ${m.auto?'<div class="mvusd">Sale solo de la reserva: si cambia el precio en 🏠 Casas o 🚐 Carro, esto se actualiza.</div>'
-              :`<button class="mvdel" data-del="${m.id}">🗑 Borrar este gasto</button>`}
+        :(m.anulado?`<button class="mvundo" data-unvoid="${m.id}">↩️ Reactivar este gasto</button>`
+                   :`<button class="mvdel" data-void="${m.id}">🚫 Anular este gasto</button>`)}
     </div></details>`;
 }
 function renderGastos(){
@@ -764,7 +809,9 @@ function renderGastos(){
 
   /* Movimientos */
   const movs=movimientos();
-  const totalMov=movs.reduce((a,m)=>a+m.amount,0);
+  const vivos=movs.filter(m=>!m.anulado);
+  const nAnul=movs.length-vivos.length;
+  const totalMov=vivos.reduce((a,m)=>a+m.amount,0);
   const lista=movs.map(filaMovimiento).join('');
 
   /* Transparencia: quién ha pagado por quién */
@@ -787,15 +834,18 @@ function renderGastos(){
       <li><span class="vb">4</span><span>En la <b>van Elina paga puesto completo</b> (8 asientos) y la <b>silla la paga íntegra la familia de Johan</b>.</span></li>
       <li><span class="vb">5</span><span><b>Peter y Sofía llegan la noche del 3 de octubre</b>: no pagan el primer día de van ni la noche de Palermo que no durmieron. Esa parte la asumen los demás.</span></li>
       <li><span class="vb">6</span><span>Las dos abuelas se llaman María del Pilar: <b>Pili</b> es la mamá de Johan y <b>Pilo</b> la suegra.</span></li>
+      <li><span class="vb">✍️</span><span>Cada movimiento queda <b>firmado por quien lo anotó</b> y <b>nada se borra</b>: lo que sobra se <b>anula</b> y se queda tachado en la lista.</span></li>
       <li><span class="vb">€</span><span>La cuenta se lleva en <b>euros</b>, que es como se paga allá. Lo que Johan pagó en dólares se convierte con el cambio del día (1 € = ${usd(FX)}, ${FXsrc}).</span></li>
     </ul></details>`;
 
   return `<div class="note luggage" style="margin-bottom:11px"><span class="ic">💶</span><span>Aquí está <b>todo el dinero del viaje</b>: lo que Johan ya adelantó (hospedajes y van) y lo que cada quien va pagando. <b>Cada pizza, parqueo o gasolina que pague Peter o Klaus baja lo que te deben</b>, así no hay que transferir nada desde Europa.</span></div>
+    <div class="yobar">${yo?`<span>👤 Estás anotando como <b style="color:${unitById(yo).color}">${unitById(yo).name}</b></span><button id="yoChg">cambiar</button>`
+      :`<span>👤 Nadie ha dicho quién eres: lo que registres saldrá <b>sin firmar</b>.</span><button id="yoSet">decir quién soy</button>`}</div>
     <div class="gsummary">${cards}</div>
     <div class="settlebox"><div class="st">Cómo quedamos hoy</div>${settleHtml}</div>
     ${form}
     ${pendHtml}
-    <div class="sectionlbl" style="margin-top:16px">Movimientos (${movs.length}) · ${money(totalMov)}</div>
+    <div class="sectionlbl" style="margin-top:16px">Movimientos (${vivos.length}) · ${money(totalMov)}${nAnul?` · ${nAnul} anulado${nAnul>1?'s':''}`:''}</div>
     <div class="elist">${lista}</div>
     ${matrizHtml}
     ${reglas}
@@ -837,12 +887,28 @@ function bindGastos(){
     if(fFor.size===0){toast('Elige al menos una persona en «¿Para quién?».',true);return;}
     const forWhom=fFor.size===PEOPLE.length?[]:[...fFor];
     const ge={id:'e'+Date.now()+Math.floor(Math.random()*1000),date,desc,amount:amt,paidBy:fPaidBy,cat:fCat,forWhom,
-      ref:(gPrefill&&gPrefill.ref)||null,base:(gPrefill&&gPrefill.base)||null};
+      ref:(gPrefill&&gPrefill.ref)||null,base:(gPrefill&&gPrefill.base)||null,por:yo||null,anulado:false,anuladoPor:null};
     expenses.push(ge);gPrefill=null;fFor=new Set(PEOPLE.map(p=>p.id));fCat='normal';
     saveG();renderPanel();body.scrollTop=0;sbIns('gastos',gToRow(ge));
     toast('Registrado ✓ · '+unitById(ge.paidBy).short+' puso '+money(ge.amount));
   };
-  body.querySelectorAll('[data-del]').forEach(el=>el.onclick=()=>{if(confirm('¿Borrar este gasto?')){const did=el.dataset.del;expenses=expenses.filter(e=>e.id!==did);saveG();renderPanel();sbDel('gastos',did);}});
+  /* Los movimientos no se borran: se anulan y siguen a la vista. */
+  body.querySelectorAll('[data-void]').forEach(el=>el.onclick=()=>{
+    const e=expenses.find(x=>x.id===el.dataset.void);if(!e)return;
+    if(!confirm('¿Anular «'+(e.desc||'este gasto')+'»?\n\nNo se borra: queda tachado en la lista y deja de contar en los saldos.'))return;
+    e.anulado=true;e.anuladoPor=yo||null;
+    saveG();renderPanel();sbUpd('gastos',e.id,{anulado:true,anulado_por:yo||null});
+    toast('Anulado · sigue visible en la lista');
+  });
+  body.querySelectorAll('[data-unvoid]').forEach(el=>el.onclick=()=>{
+    const e=expenses.find(x=>x.id===el.dataset.unvoid);if(!e)return;
+    e.anulado=false;e.anuladoPor=null;
+    saveG();renderPanel();sbUpd('gastos',e.id,{anulado:false,anulado_por:null});
+    toast('Reactivado ✓');
+  });
+  const yoChg=document.getElementById('yoChg'),yoSet=document.getElementById('yoSet');
+  if(yoChg)yoChg.onclick=showWho;
+  if(yoSet)yoSet.onclick=showWho;
   const copy=document.getElementById('gCopy');
   if(copy)copy.onclick=()=>copyTxt(document.getElementById('gJson').value,'Respaldo copiado ✓');
   const load=document.getElementById('gLoad');
@@ -1201,8 +1267,8 @@ let sb=null;
 try{ if(window.supabase&&window.supabase.createClient) sb=window.supabase.createClient(SB_URL,SB_KEY); }catch(e){ sb=null; }
 const numN=v=>(v===null||v===undefined||v==='')?null:Number(v);
 /* gasto <-> fila tabla gastos */
-const gToRow=e=>({id:e.id,fecha:e.date,descripcion:e.desc||'',monto:e.amount,pago:e.paidBy,tipo:e.cat||'normal',para:(e.forWhom&&e.forWhom.length)?e.forWhom:[],ref:e.ref||null});
-const gFromRow=r=>({id:r.id,date:r.fecha,desc:r.descripcion||'',amount:Number(r.monto),paidBy:r.pago,cat:r.tipo||'normal',forWhom:Array.isArray(r.para)?r.para:[],ref:r.ref||null});
+const gToRow=e=>({id:e.id,fecha:e.date,descripcion:e.desc||'',monto:e.amount,pago:e.paidBy,tipo:e.cat||'normal',para:(e.forWhom&&e.forWhom.length)?e.forWhom:[],ref:e.ref||null,por:e.por||null,anulado:!!e.anulado,anulado_por:e.anuladoPor||null});
+const gFromRow=r=>({id:r.id,date:r.fecha,desc:r.descripcion||'',amount:Number(r.monto),paidBy:r.pago,cat:r.tipo||'normal',forWhom:Array.isArray(r.para)?r.para:[],ref:r.ref||null,por:r.por||null,anulado:!!r.anulado,anuladoPor:r.anulado_por||null});
 /* casa <-> fila tabla alojamientos */
 const sToRow=s=>({id:s.id,base:s.base,nombre:s.name||'',url:s.url||'',precio:s.price,habitaciones:numN(s.rooms),banos:numN(s.baths),capacidad:numN(s.cap),parqueo:!!s.parking,rating:numN(s.rating),notas:s.notes||'',foto:s.foto||null,extras:Array.isArray(s.extras)?s.extras:[],reservada:!!s.reservada,invite:s.invite||null});
 const sFromRow=r=>({id:r.id,base:r.base,name:r.nombre||'',url:r.url||'',price:Number(r.precio),rooms:numN(r.habitaciones),baths:numN(r.banos),cap:numN(r.capacidad),parking:r.parqueo!==false,rating:numN(r.rating),notes:r.notas||'',foto:r.foto||null,extras:Array.isArray(r.extras)?r.extras:[],reservada:!!r.reservada,invite:r.invite||null,elegida:!!r.elegida});
@@ -1250,6 +1316,7 @@ function sbSubscribe(){
   }catch(e){}
 }
 async function sbIns(table,row){ if(!sb||!sbReady) return; try{const {error}=await sb.from(table).insert(row);if(error){console.warn('insert',table,error);toast('No se pudo guardar en la nube. Se guardó solo en este dispositivo.',true);}}catch(e){} }
+async function sbUpd(table,id,patch){ if(!sb||!sbReady) return; try{const {error}=await sb.from(table).update(patch).eq('id',id);if(error)console.warn('update',table,error);}catch(e){} }
 async function sbDel(table,id){ if(!sb||!sbReady) return; try{await sb.from(table).delete().eq('id',id);}catch(e){} }
 /* Sincroniza la marca `elegida` de todas las casas de una base (una elegida por base). Silencioso si la columna aún no existe. */
 async function sbSetElegida(base){ if(!sb||!sbReady) return; try{ await Promise.all(stays.filter(s=>s.base===base).map(s=>sb.from('alojamientos').update({elegida:!!s.elegida}).eq('id',s.id))); }catch(e){} }
@@ -1548,7 +1615,12 @@ function fitAll(){
   const tapado=Math.max(0,window.innerHeight-panel.getBoundingClientRect().top);
   map.fitBounds(b,{paddingTopLeft:[26,26],paddingBottomRight:[26,Math.min(tapado+12,window.innerHeight*0.66)]});
 }
-drawMap();renderPanel();
+document.getElementById('whoami').addEventListener('click',e=>{
+  const b=e.target.closest('[data-yo]');
+  if(b){setYo(b.dataset.yo);return;}
+  if(yo&&e.target.id==='whoami')hideWho(); /* si ya te identificaste, se puede cerrar tocando fuera */
+});
+drawMap();renderPanel();pintaQuien();
 setTimeout(()=>{measureSheet();snapTo('full',true);map.invalidateSize();fitAll();},220);
 sbSubscribe();sbLoad();loadFX();
 </script>
