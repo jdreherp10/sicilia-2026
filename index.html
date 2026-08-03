@@ -252,17 +252,6 @@
   .stlink{display:inline-block;font-size:12px;font-weight:700;color:var(--accent);text-decoration:none;border:1px solid rgba(56,189,248,.35);border-radius:9px;padding:7px 12px}
   .stlink:hover{background:rgba(56,189,248,.1)}
   .stthumb{width:100%;height:132px;object-fit:cover;border-radius:10px;border:1px solid var(--line);margin-bottom:10px;background:var(--bg);display:block}
-  /* Auto-relleno desde el link */
-  .urlrow{display:flex;gap:6px;align-items:stretch}
-  .urlrow input{flex:1;min-width:0}
-  .sfill{flex:0 0 auto;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.4);color:var(--accent);border-radius:9px;padding:0 12px;font-size:12.5px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap}
-  .sfill:hover:not(:disabled){background:rgba(56,189,248,.22)}
-  .sfill:disabled{opacity:.55;cursor:default}
-  .sfillmsg{font-size:11px;line-height:1.45;margin-top:6px;display:none}
-  .sfillmsg.on{display:block}
-  .sfillmsg.ok{color:#86efac}
-  .sfillmsg.warn{color:#fda4af}
-  .sfillmsg.busy{color:var(--muted)}
   /* Extras / tasas en efectivo */
   .stextras{background:rgba(233,185,73,.07);border:1px solid rgba(233,185,73,.28);border-radius:10px;padding:8px 10px;margin-bottom:9px}
   .stextra{display:flex;justify-content:space-between;gap:8px;font-size:11.5px;color:var(--txt);padding:2px 0}
@@ -865,9 +854,6 @@ const SKEY='sicilia_stays_v1';
 const STAY_SEED=[]; /* precarga de opciones (se llena al pegar links); solo aplica en primer uso */
 let stays;{const _r=localStorage.getItem(SKEY);if(_r){try{stays=JSON.parse(_r)||[];}catch(e){stays=[];}}else{stays=STAY_SEED.slice();}}
 let sBase=ORDER[0];
-let sParking=true;
-let sFoto=null; /* foto traída por el auto-relleno, se adjunta al añadir la casa */
-let sExtras=[]; /* tasas/efectivo detectadas por el auto-relleno, se adjuntan al añadir la casa */
 function saveS(){try{localStorage.setItem(SKEY,JSON.stringify(stays));}catch(e){}}
 function nightsOf(bid){return BASES[bid]?BASES[bid].nights:1;}
 const TAXHEADS=PEOPLE.length; /* personas físicas para tasas por persona (los 8; niños suelen estar exentos) */
@@ -893,13 +879,11 @@ function stayMetrics(s){const ng=nightsOf(s.base);const extra=eur2usd(extrasTota
 /* Casa que cuenta para el presupuesto de una base: la marcada como elegida; si no hay, la reservada. */
 function chosenFor(base){const l=stays.filter(s=>s.base===base);return l.find(s=>s.elegida)||l.find(s=>s.reservada)||null;}
 function renderStays(){
-  const pills=ORDER.map(id=>{const n=stays.filter(s=>s.base===id).length;return `<div class="pill ${id===sBase?'on':''}" data-sbase="${id}"><span class="pd" style="background:${BASES[id].color}"></span>${BASES[id].name}${n?` · ${n}`:''}</div>`;}).join('');
+  const pills=ORDER.map(id=>{const s=stays.find(x=>x.base===id&&x.reservada);return `<div class="pill ${id===sBase?'on':''}" data-sbase="${id}"><span class="pd" style="background:${BASES[id].color}"></span>${BASES[id].name}${s?' ✅':''}</div>`;}).join('');
   const b=BASES[sBase],sc=sched[sBase];
   const list=stays.filter(s=>s.base===sBase);
   const chosenId=(chosenFor(sBase)||{}).id;
-  let bestId=null,bestPP=Infinity;
-  list.forEach(s=>{if(s.reservada)return;const {perPP}=stayMetrics(s);if((s.cap==null||s.cap>=8)&&perPP<bestPP){bestPP=perPP;bestId=s.id;}});
-  /* reservadas primero; el resto por precio/persona */
+  /* reservadas primero */
   const sorted=list.slice().sort((a,c)=>(c.reservada?1:0)-(a.reservada?1:0)||stayMetrics(a).perPP-stayMetrics(c).perPP);
   const cards=sorted.map(s=>{
     const {ng,extra,total,perNight,perPP}=stayMetrics(s);
@@ -919,64 +903,41 @@ function renderStays(){
       return `<div class="stextra ${x.cat==='deposito'?'dep':''}"><span>${et.ic} ${et.n}</span><span>${detalle}</span></div>`;
     }).join('');
     const extrasBox=(s.extras&&s.extras.length)?`<div class="stextras">
-        ${extra?`<div class="stextra tot"><span>💶 Extras en efectivo${dep?' (sin depósito)':''}</span><span>+ ${usd(extra)}</span></div>`:''}
+        ${extra?`<div class="stextra tot"><span>💵 A pagar en efectivo allá${dep?' (sin depósito)':''}</span><span>+ ${usd(extra)}</span></div>`:''}
         ${extrasRows}
-        <div class="stextranote">Extras en € del anuncio, convertidos a USD (1 € = ${usd(FX)}). Estimado para ${TAXHEADS} personas × ${ng} noches; los niños suelen estar exentos de la tasa.</div>
+        <div class="stextranote">Montos en € del anuncio, convertidos a USD (1 € = ${usd(FX)}). Aparecen como pendientes en 💶 Cuentas hasta que alguien los pague.</div>
       </div>`:'';
-    return `<div class="stcard ${s.reservada?'reserved':(s.id===bestId?'best':'')}">
-      <button class="stdel" data-sdel="${s.id}" aria-label="Eliminar">×</button>
+    return `<div class="stcard ${s.reservada?'reserved':''}">
       ${s.reservada?'<div class="resban">✅ RESERVADA</div>':''}
       ${s.foto?`<img class="stthumb" src="${s.foto}" alt="" loading="lazy" onerror="this.style.display='none'">`:''}
-      <div class="sttop"><div class="stname">${s.name||'(sin nombre)'}${(!s.reservada&&s.id===bestId)?'<span class="stbadge">⭐ MEJOR PRECIO</span>':''}${s.id===chosenId?'<span class="stbudget">📊 EN PRESUPUESTO</span>':''}</div>${s.rating?`<span class="strate">★ ${s.rating}</span>`:''}</div>
+      <div class="sttop"><div class="stname">${s.name||'(sin nombre)'}${(list.length>1&&s.id===chosenId)?'<span class="stbudget">📊 EN PRESUPUESTO</span>':''}</div>${s.rating?`<span class="strate">★ ${s.rating}</span>`:''}</div>
       ${s.invite?`<a class="stinvite" href="${s.invite}" target="_blank" rel="noopener">🔗 Ver reserva · invitar a la familia ↗</a>`:''}
       ${s.price?`<div class="stmetrics">
         <div class="stmetric hero"><div class="mv">${usd(perPP)}</div><div class="ml">noche / pers.</div></div>
         <div class="stmetric"><div class="mv">${usd(perNight)}</div><div class="ml">por noche</div></div>
         <div class="stmetric"><div class="mv">${usd(total)}</div><div class="ml">total${extra?' c/extras':''} · ${ng} N</div></div>
-      </div>`:(s.reservada?'<div class="stnoprice">Reserva confirmada. Añade el precio y el link del anuncio cuando quieras verlo aquí.</div>':'')}
+      </div>`:(s.reservada?'<div class="stnoprice">Reserva confirmada. Falta cargar el precio de la factura.</div>':'')}
       ${extrasBox}
       <div class="stspecs">${specs.join('')}</div>
       ${s.notes?`<div class="stnotes">${s.notes}</div>`:''}
       ${s.url?`<a class="stlink" href="${s.url}" target="_blank" rel="noopener">Ver anuncio ↗</a>`:''}
-      <button class="stchoose ${s.id===chosenId?'on':''}" data-choose="${s.id}">${s.id===chosenId?'📊 ✓ Cuenta en el presupuesto':'📊 Elegir para el presupuesto'}</button>
+      ${list.length>1?`<button class="stchoose ${s.id===chosenId?'on':''}" data-choose="${s.id}">${s.id===chosenId?'📊 ✓ Cuenta en el presupuesto':'📊 Elegir para el presupuesto'}</button>`:''}
     </div>`;
   }).join('');
-  const summary=list.length?`${list.length} opción${list.length>1?'es':''} · mejor precio ${bestId?usd(bestPP)+' /noche/pers.':'—'}`:'Sin opciones todavía';
-  const parkChips=`<div class="gchip paychip ${sParking?'on':''}" style="--c:#4ade80" data-park="1">🚗 Con parqueo</div><div class="gchip paychip ${!sParking?'on':''}" style="--c:#fb7185" data-park="0">🚫 Sin parqueo</div>`;
-  return `<div class="note luggage" style="margin-bottom:11px"><span class="ic">🏠</span><span>Compara casas por base, <b>en USD</b>. La <b>⭐ mejor</b> = menor precio por noche y persona entre las que caben los 8. El precio por persona se reparte entre <b>7,25 puestos</b> (Elina cuenta ¼ en hospedaje). Cambio <b>1 € = ${usd(FX)}</b> (${FXsrc}).</span></div>
+  const nRes=ORDER.filter(id=>stays.some(s=>s.base===id&&s.reservada)).length;
+  return `<div class="note luggage" style="margin-bottom:11px"><span class="ic">🏠</span><span>Las <b>${nRes} casas del viaje</b>, ya reservadas y pagadas. El precio por persona se reparte entre <b>7,25 puestos</b> (Elina cuenta ¼ en hospedaje). Cambio <b>1 € = ${usd(FX)}</b> (${FXsrc}).</span></div>
     <div class="pills">${pills}</div>
     <div class="ddhd"><div><div class="ddt" style="color:${b.color}">${b.name}</div><div class="ddb">entra ${sc.from} oct · sale ${sc.to+1} oct · ${sc.n} noches</div></div></div>
-    <div class="staysum">${summary}</div>
-    ${cards||'<div style="color:var(--muted);font-size:12px;padding:2px 4px 12px">Aún no hay casas para esta base. Añade la primera abajo 👇</div>'}
-    <details class="fold" style="margin-top:6px"><summary>➕ Añadir otra casa en ${b.name}</summary>
-    <div class="gform">
-      <div><label>Nombre / apodo</label><input type="text" id="sName" placeholder="Villa con piscina · Airbnb"></div>
-      <div><label>Link (Airbnb / Booking)</label>
-        <div class="urlrow"><input type="text" id="sUrl" inputmode="url" placeholder="https://…"><button class="sfill" id="sFillBtn" type="button">✨ Rellenar</button></div>
-        <div class="sfillmsg" id="sFillMsg"></div>
-      </div>
-      <div><label>Precio total de la estancia en USD (${nightsOf(sBase)} noches) — lo que te muestra Airbnb</label><input type="text" id="sPrice" inputmode="decimal" placeholder="0.00"></div>
-      <div class="chrow">
-        <div style="flex:1;min-width:74px"><label>Habitac.</label><input type="text" id="sRooms" inputmode="numeric" placeholder="4"></div>
-        <div style="flex:1;min-width:74px"><label>Baños</label><input type="text" id="sBaths" inputmode="numeric" placeholder="2"></div>
-        <div style="flex:1;min-width:74px"><label>Capacidad</label><input type="text" id="sCap" inputmode="numeric" placeholder="8"></div>
-      </div>
-      <div><label>Parqueo en sitio</label><div class="chrow">${parkChips}</div></div>
-      <div><label>Rating (opcional)</label><input type="text" id="sRate" inputmode="decimal" placeholder="4,8"></div>
-      <div><label>Notas (opcional)</label><input type="text" id="sNotes" placeholder="A 10 min de la playa, terraza, ZTL…"></div>
-      <button class="gadd" id="sAddBtn">+ Añadir casa a ${b.name}</button>
-    </div></details>
-    <details class="fold"><summary>🔄 Sincronización y respaldo</summary>
-    <div class="gnote" style="margin:0;border:0;border-radius:0"><b>Sincronizado en vivo con la familia.</b> Todos ven las mismas casas al instante. El respaldo de abajo es solo por si acaso (uso offline).
+    ${cards||'<div style="color:var(--muted);font-size:12px;padding:2px 4px 12px">Sin casa cargada para esta base.</div>'}
+    <details class="fold" style="margin-top:6px"><summary>🔄 Sincronización y respaldo</summary>
+    <div class="gnote" style="margin:0;border:0;border-radius:0"><b>Sincronizado en vivo con la familia.</b> Todos ven las mismas casas al instante. Las reservas están cerradas: esta pestaña ya es solo de consulta.
       <textarea id="sJson" readonly>${JSON.stringify(stays)}</textarea>
-      <div class="gbtns"><button id="sCopy">📋 Copiar respaldo</button><button id="sLoad">📥 Cargar pegado</button></div></div></details>`;
+      <div class="gbtns"><button id="sCopy">📋 Copiar respaldo</button></div></div></details>`;
 }
 function bindStays(){
   const body=document.getElementById('panelBody');
   body.querySelectorAll('[data-sbase]').forEach(el=>el.onclick=()=>{sBase=el.dataset.sbase;renderPanel();body.scrollTop=0;});
-  body.querySelectorAll('[data-park]').forEach(el=>el.onclick=()=>{sParking=el.dataset.park==='1';body.querySelectorAll('[data-park]').forEach(x=>x.classList.toggle('on',x.dataset.park===(sParking?'1':'0')));});
-  body.querySelectorAll('[data-sdel]').forEach(el=>el.onclick=()=>{if(confirm('¿Eliminar esta casa?')){const sid=el.dataset.sdel;stays=stays.filter(s=>s.id!==sid);saveS();renderPanel();sbDel('alojamientos',sid);}});
-  /* Elegir / desmarcar la casa que cuenta en el presupuesto (una por base) */
+  /* Elegir la casa que cuenta en el presupuesto (solo aparece si una base tuviera más de una). */
   body.querySelectorAll('[data-choose]').forEach(el=>el.onclick=()=>{
     const sid=el.dataset.choose;const s=stays.find(x=>x.id===sid);if(!s)return;
     const wasChosen=(chosenFor(s.base)||{}).id===sid;
@@ -984,86 +945,8 @@ function bindStays(){
     if(!wasChosen)s.elegida=true;
     saveS();renderPanel();sbSetElegida(s.base);
   });
-  const numOr=id=>{const v=(document.getElementById(id).value||'').trim().replace(',','.');const n=parseFloat(v);return isNaN(n)?null:n;};
-  const add=document.getElementById('sAddBtn');
-  if(add)add.onclick=()=>{
-    const name=document.getElementById('sName').value.trim();
-    const url=document.getElementById('sUrl').value.trim();
-    /* precio en USD: acepta "1350", "1350.50" y "1,350.50"/"1.350,50" (el último separador es el decimal) */
-    let raw=document.getElementById('sPrice').value.trim().replace(/[^\d.,]/g,'');
-    const lc=Math.max(raw.lastIndexOf(','),raw.lastIndexOf('.'));
-    if(lc>=0){raw=raw.slice(0,lc).replace(/[.,]/g,'')+'.'+raw.slice(lc+1).replace(/[.,]/g,'');}
-    const price=parseFloat(raw);
-    if(!price||price<=0){toast('Pon un precio total válido (en USD).',true);return;}
-    const st={id:'s'+Date.now()+Math.floor(Math.random()*1000),base:sBase,name,url,price,rooms:numOr('sRooms'),baths:numOr('sBaths'),cap:numOr('sCap'),parking:sParking,rating:numOr('sRate'),notes:document.getElementById('sNotes').value.trim(),foto:sFoto,extras:sExtras.slice()};
-    stays.push(st);sFoto=null;sExtras=[];saveS();renderPanel();body.scrollTop=0;sbIns('alojamientos',sToRow(st));toast('Casa añadida ✓');
-  };
-  /* Auto-relleno: la Edge Function abre el anuncio del lado del servidor y devuelve lo legible. */
-  const fill=document.getElementById('sFillBtn');
-  const fmsg=document.getElementById('sFillMsg');
-  const setMsg=(txt,cls)=>{if(fmsg){fmsg.className='sfillmsg on '+cls;fmsg.textContent=txt;}};
-  if(fill)fill.onclick=async()=>{
-    const u=(document.getElementById('sUrl').value||'').trim();
-    if(!u){setMsg('Pega primero el link del anuncio.','warn');return;}
-    if(!sb){setMsg('Sin conexión con la nube: llena los datos a mano.','warn');return;}
-    const prev=fill.textContent;
-    fill.disabled=true;fill.textContent='⏳';setMsg('Abriendo el anuncio…','busy');
-    let d=null,err=null;
-    try{
-      const invokeBody={url:u};
-      /* Booking bloquea las IPs de datacenter; lo leemos desde ESTE navegador vía jina (IP residencial) y se lo pasamos ya listo a la función. */
-      if(/booking\.com/i.test(u)){
-        setMsg('Leyendo Booking (tarda unos segundos)…','busy');
-        try{
-          const ac=new AbortController();const to=setTimeout(()=>ac.abort(),28000);
-          const jr=await fetch('https://r.jina.ai/'+u,{headers:{'Accept':'application/json','X-Return-Format':'markdown'},signal:ac.signal});
-          clearTimeout(to);
-          if(jr.ok){const jd=(await jr.json()).data;if(jd)invokeBody.prefetched={metadata:jd.metadata||{},content:(jd.content||'').slice(0,200000),title:jd.title||'',description:jd.description||''};}
-        }catch(e){}
-      }
-      const r=await sb.functions.invoke('resumen-link',{body:invokeBody});
-      if(r.error){
-        try{const j=await r.error.context.json();err=j&&j.error;}catch(e){}
-        if(!err)err='No se pudo leer el anuncio. Llena los datos a mano.';
-      }else if(r.data&&r.data.error){err=r.data.error;}
-      else d=r.data;
-    }catch(e){err='No se pudo contactar el lector de links.';}
-    fill.disabled=false;fill.textContent=prev;
-    if(err||!d){setMsg(err||'No se pudo leer el anuncio.','warn');return;}
-    const puesto=[];
-    const set=(id,v,etiqueta)=>{
-      if(v===null||v===undefined||v==='')return;
-      const el=document.getElementById(id);
-      if(el&&!el.value.trim()){el.value=String(v).replace('.',',');if(etiqueta)puesto.push(etiqueta);}
-    };
-    if(d.nombre){const el=document.getElementById('sName');if(el&&!el.value.trim()){el.value=d.nombre;puesto.push('nombre');}}
-    set('sRate',d.rating,d.rating?`★ ${d.rating}`:null);
-    set('sRooms',d.habitaciones,d.habitaciones?`${d.habitaciones} hab`:null);
-    set('sBaths',d.banos,d.banos?`${d.banos} baños`:null);
-    set('sCap',d.capacidad,d.capacidad?`capacidad ${d.capacidad}`:null);
-    const notas=[d.camas?`${d.camas} camas`:null,d.descripcion].filter(Boolean).join(' · ');
-    if(notas){const el=document.getElementById('sNotes');if(el&&!el.value.trim()){el.value=notas;puesto.push('notas');}}
-    if(d.foto){sFoto=d.foto;puesto.push('foto');}
-    /* tasas / efectivo detectadas en la descripción */
-    sExtras=Array.isArray(d.tasas)?d.tasas.filter(x=>x&&x.texto):[];
-    let tasaMsg='';
-    if(sExtras.length){
-      const ng=nightsOf(sBase);
-      const costo=sExtras.reduce((t,x)=>t+extraCost(x,ng),0);
-      const dep=sExtras.filter(x=>x.cat==='deposito'&&x.monto!=null).reduce((t,x)=>t+Number(x.monto||0),0);
-      const partes=[];
-      if(costo)partes.push(`~${usd(eur2usd(costo))} en tasas/efectivo (para ${TAXHEADS} pers. × ${ng} noches)`);
-      if(dep)partes.push(`depósito ${usd(eur2usd(dep))} reembolsable`);
-      tasaMsg=` 💶 Detecté ${partes.join(' + ')||'posibles pagos en efectivo'}: se suman al total al guardar (revísalos en el anuncio).`;
-    }
-    const capMala=d.capacidad!=null&&d.capacidad<8;
-    const base=puesto.length?`✓ ${d.fuente}: ${puesto.join(', ')}. Falta el precio: ponlo tú.`:`Leí ${d.fuente} pero los campos ya tenían datos (no los piso). El precio siempre es manual.`;
-    setMsg(`${base}${capMala?` ⚠️ Capacidad ${d.capacidad}: no caben los 8.`:''}${tasaMsg}`,capMala?'warn':'ok');
-  };
   const copy=document.getElementById('sCopy');
-  if(copy)copy.onclick=()=>{const ta=document.getElementById('sJson');ta.select();const done=()=>{copy.textContent='✓ Copiado';setTimeout(()=>copy.textContent='📋 Copiar respaldo',1500);};if(navigator.clipboard){navigator.clipboard.writeText(ta.value).then(done).catch(()=>{document.execCommand('copy');done();});}else{document.execCommand('copy');done();}};
-  const load=document.getElementById('sLoad');
-  if(load)load.onclick=()=>{const t=prompt('Pega aquí el respaldo (JSON) de casas:');if(!t)return;try{const arr=JSON.parse(t);if(Array.isArray(arr)){stays=arr;saveS();renderPanel();}else toast('Formato no válido.',true);}catch(e){toast('No se pudo leer el JSON.',true);}};
+  if(copy)copy.onclick=()=>copyTxt(document.getElementById('sJson').value,'Respaldo copiado ✓');
 }
 
 /* ============ Presupuesto de hospedaje (proyección) ============ */
