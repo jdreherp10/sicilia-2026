@@ -380,6 +380,23 @@
   .dtr .dta{font-size:13.5px;font-weight:800;white-space:nowrap}
   .dtr.tot{border-top:1px solid var(--line);margin-top:2px}
   .dtr.tot .dtd,.dtr.tot .dta{color:var(--accent)}
+  /* Calculadora de restaurante */
+  .platos{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:11px 12px}
+  .plrow{display:flex;align-items:center;gap:10px;padding:5px 0}
+  .plrow .pln{flex:1;min-width:0;font-size:13px;font-weight:600;display:flex;flex-direction:column}
+  .plrow .pln small{font-size:10px;color:var(--muted);font-weight:500;margin-top:1px}
+  .plrow .plin{flex:0 0 108px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px;color:var(--txt);font-size:15px;font-family:inherit;text-align:right}
+  .plrow .plin:focus{outline:none;border-color:var(--accent)}
+  .plrow.comp{border-top:1px dashed var(--line);margin-top:6px;padding-top:10px}
+  .plentre{margin:10px 0 4px}
+  .plentre label{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:6px}
+  .pltot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding-top:10px;border-top:1px solid var(--line);font-size:13px;font-weight:700}
+  .pltot b{font-size:20px;color:var(--accent)}
+  .plcheck{margin-top:9px}
+  .plcheck input{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px 11px;color:var(--txt);font-size:14px;font-family:inherit}
+  .plcheck input:focus{outline:none;border-color:var(--accent)}
+  .plcheck .stextranote{margin-top:6px}
+  @media(max-width:820px){.plrow .plin,.plcheck input{font-size:16px}.plrow .plin{flex:0 0 116px}}
   .gcancel{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:10px;padding:11px;font-size:12.5px;font-weight:700;font-family:inherit;cursor:pointer}
 </style>
 </head>
@@ -631,6 +648,10 @@ let fCat='normal';
 let fFor=new Set(PEOPLE.map(p=>p.id));
 let gPrefill=null;   /* pendiente de efectivo que se está registrando */
 let mtxSel=null;     /* celda abierta de la matriz: {de, para} ('*' = todo lo que puso) */
+let fModo='igual';   /* 'igual' = se parte entre los que comieron · 'platos' = cada quien su consumo */
+let fPlatos={};      /* {pid: monto del plato} */
+let fComp=0;         /* vino, agua, coperto, propina: se parte entre los de la mesa */
+let fEntre=null;     /* null = los que comieron; Set = elegidos a mano */
 let gOpenForm=false; /* abrir el formulario al redibujar */
 function saveG(){try{localStorage.setItem(GKEY,JSON.stringify(expenses));}catch(e){}}
 const unitById=id=>UNITS.find(u=>u.id===id);
@@ -673,9 +694,39 @@ function presencia(pid,cat,base){
   return 1;
 }
 const pesoDe=(pid,cat,base)=>cw(pid,cat)*presencia(pid,cat,base);
-/* Reparte un monto entre los núcleos según a quiénes beneficia. Devuelve {A,B,K}. */
-function repartir(amount,cat,base,forWhom){
+/* Acepta "12", "12,5" y sumas tipo "12+8,5" (varios platos de la misma persona). */
+function evalMonto(txt){
+  const t=String(txt||'').replace(/\s/g,'').replace(/,/g,'.');
+  if(!t)return 0;
+  if(!/^[\d.+]+$/.test(t))return NaN;
+  return t.split('+').filter(x=>x!=='').reduce((a,x)=>a+(parseFloat(x)||0),0);
+}
+/* Quiénes se parten el vino/agua/coperto: los marcados a mano, o si no, los que comieron. */
+function entreEfectivo(){
+  if(fEntre)return [...fEntre];
+  return PEOPLE.filter(p=>(fPlatos[p.id]||0)>0).map(p=>p.id);
+}
+/* Lo que le toca a cada persona: su plato + su parte de lo compartido. */
+function montosFinales(d){
+  const out={},platos=(d&&d.platos)||{};
+  Object.keys(platos).forEach(pid=>{const v=Number(platos[pid])||0;if(v>0)out[pid]=(out[pid]||0)+v;});
+  const c=d&&d.compartido;
+  if(c&&Number(c.monto)>0){
+    const entre=(c.entre&&c.entre.length)?c.entre:Object.keys(platos).filter(k=>Number(platos[k])>0);
+    if(entre.length){const cada=Number(c.monto)/entre.length;entre.forEach(pid=>out[pid]=(out[pid]||0)+cada);}
+  }
+  return out;
+}
+const totalDetalle=d=>Object.values(montosFinales(d)).reduce((a,b)=>a+b,0);
+/* Reparte un monto entre los núcleos según a quiénes beneficia. Devuelve {A,B,K}.
+   Si el gasto trae detalle por platos, manda el consumo real de cada quien. */
+function repartir(amount,cat,base,forWhom,detalle){
   const out={A:0,B:0,K:0};
+  if(detalle){
+    const m=montosFinales(detalle);
+    for(const pid in m){const p=PEOPLE.find(x=>x.id===pid);if(!p)continue;for(const u in p.w)out[u]+=m[pid]*p.w[u];}
+    return out;
+  }
   const who=(forWhom&&forWhom.length)?forWhom:PEOPLE.map(p=>p.id);
   const ws=who.map(pid=>pesoDe(pid,cat,base));
   const tot=ws.reduce((a,b)=>a+b,0);
@@ -687,6 +738,7 @@ function repartir(amount,cat,base,forWhom){
   });
   return out;
 }
+const repartirMov=m=>repartir(m.amount,m.cat,m.base,m.forWhom,m.detalle);
 /* Puestos ponderados (para las métricas de la pestaña Casas). */
 const STAYHEADS=PEOPLE.reduce((s,p)=>s+cw(p.id,'hospedaje'),0); /* 7,25 */
 
@@ -740,7 +792,7 @@ function computeG(){
   const matriz={};UNITS.forEach(u=>{matriz[u.id]={A:0,B:0,K:0};});
   movimientos().filter(m=>!m.anulado).forEach(m=>{
     paid[m.paidBy]=(paid[m.paidBy]||0)+m.amount;
-    const sp=repartir(m.amount,m.cat,m.base,m.forWhom);
+    const sp=repartirMov(m);
     UNITS.forEach(u=>{owed[u.id]+=sp[u.id];matriz[m.paidBy][u.id]+=sp[u.id];});
   });
   const bal={};UNITS.forEach(u=>bal[u.id]=paid[u.id]-owed[u.id]);
@@ -756,7 +808,7 @@ function settleG(bal){
 
 /* ---- Pintado ---- */
 function filaMovimiento(m){
-  const sp=repartir(m.amount,m.cat,m.base,m.forWhom);
+  const sp=repartirMov(m);
   const quien=(m.forWhom&&m.forWhom.length)
     ? m.forWhom.map(id=>(PEOPLE.find(p=>p.id===id)||{}).name).filter(Boolean).join(', ')
     : 'los 8';
@@ -772,6 +824,11 @@ function filaMovimiento(m){
       ${m.anulado?`<div class="mvusd">🚫 Anulado${m.anuladoPor?' por '+unitById(m.anuladoPor).short:''}: no cuenta en los saldos, pero se queda aquí para que quede constancia.</div>`:''}
       ${m.usd?`<div class="mvusd">Se pagó ${usd(m.usd)} con tarjeta · convertido a € con el cambio del día (1 € = ${usd(FX)}).</div>`:''}
       ${m.nota?`<div class="mvusd">${m.nota}</div>`:''}
+      ${(m.detalle&&!m.anulado)?`<div class="stextras" style="margin:10px 0 0">
+        ${Object.entries(montosFinales(m.detalle)).sort((a,b)=>b[1]-a[1]).map(([pid,v])=>
+          `<div class="stextra"><span>🍽️ ${(PEOPLE.find(p=>p.id===pid)||{}).name||pid}</span><span>${money(v)}</span></div>`).join('')}
+        ${(m.detalle.compartido&&Number(m.detalle.compartido.monto)>0)?`<div class="stextranote">Incluye ${money(m.detalle.compartido.monto)} de vino, agua, coperto o propina, repartido entre ${(m.detalle.compartido.entre||[]).length} personas.</div>`:''}
+      </div>`:''}
       ${m.anulado?'':`<div class="mvsplit">${detalle}</div>`}
       ${m.auto?'<div class="mvusd">Sale solo de la reserva: si cambia el precio en 🏠 Casas o 🚐 Carro, esto se actualiza.</div>'
         :(m.anulado?`<button class="mvundo" data-unvoid="${m.id}">↩️ Reactivar este gasto</button>`
@@ -783,7 +840,7 @@ function detalleCelda(){
   if(!mtxSel)return '';
   const {de,para}=mtxSel, todos=para==='*';
   const filas=movimientos().filter(m=>!m.anulado&&m.paidBy===de).map(m=>{
-    const sp=repartir(m.amount,m.cat,m.base,m.forWhom);
+    const sp=repartirMov(m);
     return {m,v:todos?(sp.A+sp.B+sp.K):sp[para]};
   }).filter(x=>x.v>0.005).sort((a,b)=>b.v-a.v);
   const tot=filas.reduce((t,x)=>t+x.v,0);
@@ -802,6 +859,27 @@ function detalleCelda(){
     <div class="dthd"><span>${titulo}</span><button id="mtxClose" aria-label="Cerrar">✕</button></div>
     ${rows||'<div class="stextranote" style="margin:8px 0">Todavía no hay nada aquí.</div>'}
     <div class="dtr tot"><span class="dti"></span><span class="dtinfo"><span class="dtd">Total</span></span><span class="dta">${money(tot)}</span></div>
+  </div>`;
+}
+/* Calculadora de restaurante: se anota lo de cada quien y no hace falta pedir cuentas separadas. */
+function calcPlatos(){
+  const ef=new Set(entreEfectivo());
+  const filas=PEOPLE.map(p=>`<div class="plrow">
+      <span class="pln">${p.name}</span>
+      <input class="plin" data-plato="${p.id}" inputmode="decimal" placeholder="0,00" value="${fPlatos[p.id]?String(fPlatos[p.id]).replace('.',','):''}">
+    </div>`).join('');
+  const chips=PEOPLE.map(p=>`<div class="gchip ${ef.has(p.id)?'on':''}" data-entre="${p.id}">${p.name}</div>`).join('');
+  const det={platos:fPlatos,compartido:{monto:fComp,entre:entreEfectivo()}};
+  return `<div class="platos">
+    <div class="stextranote" style="margin:0 0 8px">Escribe lo que consumió cada uno. Puedes sumar varios platos en la misma casilla: <b>12+8,5</b>.</div>
+    ${filas}
+    <div class="plrow comp">
+      <span class="pln">Compartido<small>vino, agua, pan, coperto, propina</small></span>
+      <input class="plin" id="plComp" inputmode="decimal" placeholder="0,00" value="${fComp?String(fComp).replace('.',','):''}">
+    </div>
+    <div class="plentre"><label>Se reparte entre ${fEntre?'':'<span style="color:var(--accent)">(los que comieron)</span>'}</label><div class="chrow">${chips}</div></div>
+    <div class="pltot"><span>Total de la cuenta</span><b id="plTotal">${money(totalDetalle(det))}</b></div>
+    <div class="plcheck"><input type="text" id="plBill" inputmode="decimal" placeholder="¿Cuánto dice el recibo? (opcional)"><div id="plDiff" class="stextranote"></div></div>
   </div>`;
 }
 function renderGastos(){
@@ -840,11 +918,15 @@ function renderGastos(){
     <div class="gform">
       ${gPrefill?`<div class="note luggage" style="margin:0 0 4px"><span class="ic">💵</span><span>Registrando <b>${gPrefill.desc}</b>. Solo falta marcar <b>quién lo pagó</b> y darle a añadir.</span></div>`:''}
       <div><label>¿Qué fue?</label><input type="text" id="gDesc" placeholder="Pizza, parqueo, gasolina, entradas…" value="${(pf.desc||'').replace(/"/g,'&quot;')}"></div>
-      <div><label>¿Cuánto? (€)</label><input type="text" id="gAmt" inputmode="decimal" placeholder="0,00" value="${pf.amount?String(pf.amount).replace('.',','):''}"></div>
+      ${fModo==='igual'?`<div><label>¿Cuánto? (€)</label><input type="text" id="gAmt" inputmode="decimal" placeholder="0,00" value="${pf.amount?String(pf.amount).replace('.',','):''}"></div>`:''}
       <div><label>¿Quién lo pagó?</label><div class="chrow">${payChips}</div></div>
-      <div><label>¿Para quién? <span id="gForLbl" style="color:var(--accent)">${fFor.size===PEOPLE.length?'(los 8)':'('+fFor.size+')'}</span></label>
+      <div><label>Cómo se reparte</label><div class="chrow">
+        <div class="gchip paychip ${fModo==='igual'?'on':''}" style="--c:#38bdf8" data-modo="igual">➗ Partes iguales</div>
+        <div class="gchip paychip ${fModo==='platos'?'on':''}" style="--c:#38bdf8" data-modo="platos">🍽️ Por platos</div>
+      </div></div>
+      ${fModo==='igual'?`<div><label>¿Para quién? <span id="gForLbl" style="color:var(--accent)">${fFor.size===PEOPLE.length?'(los 8)':'('+fFor.size+')'}</span></label>
         <div class="chrow" style="margin-bottom:6px"><div class="gchip" id="gAll">Los 8</div><div class="gchip" id="gAbuelas">Solo abuelas</div><div class="gchip" id="gNone">Ninguno</div></div>
-        <div class="chrow">${forChips}</div></div>
+        <div class="chrow">${forChips}</div></div>`:calcPlatos()}
       <div><label>Tipo de gasto</label><div class="chrow">${catChips}</div></div>
       <div><label>Fecha</label><input type="date" id="gDate" value="${today}"></div>
       <button class="gadd" id="gAddBtn">${gPrefill?'Registrar el pago':'+ Añadir gasto'}</button>
@@ -880,6 +962,7 @@ function renderGastos(){
       <li><span class="vb">4</span><span>En la <b>van Elina paga puesto completo</b> (8 asientos) y la <b>silla la paga íntegra la familia de Johan</b>.</span></li>
       <li><span class="vb">5</span><span><b>Peter y Sofía llegan la noche del 3 de octubre</b>: no pagan el primer día de van ni la noche de Palermo que no durmieron. Esa parte la asumen los demás.</span></li>
       <li><span class="vb">6</span><span>Las dos abuelas se llaman María del Pilar: <b>Pili</b> es la mamá de Johan y <b>Pilo</b> la suegra.</span></li>
+      <li><span class="vb">🍽️</span><span>En restaurantes se puede repartir <b>por platos</b>: se anota lo que consumió cada uno y el vino o el coperto se parte entre los de la mesa. Así no hay que pedir cuentas separadas.</span></li>
       <li><span class="vb">✍️</span><span>Cada movimiento queda <b>firmado por quien lo anotó</b> y <b>nada se borra</b>: lo que sobra se <b>anula</b> y se queda tachado en la lista.</span></li>
       <li><span class="vb">€</span><span>La cuenta se lleva en <b>euros</b>, que es como se paga allá. Lo que Johan pagó en dólares se convierte con el cambio del día (1 € = ${usd(FX)}, ${FXsrc}).</span></li>
     </ul></details>`;
@@ -922,19 +1005,61 @@ function bindGastos(){
   });
   const cancel=document.getElementById('gCancel');
   if(cancel)cancel.onclick=()=>{gPrefill=null;fFor=new Set(PEOPLE.map(p=>p.id));fCat='normal';renderPanel();};
+  /* Calculadora por platos */
+  body.querySelectorAll('[data-modo]').forEach(el=>el.onclick=()=>{fModo=el.dataset.modo;gOpenForm=true;renderPanel();});
+  const pintaTotal=()=>{
+    const det={platos:fPlatos,compartido:{monto:fComp,entre:entreEfectivo()}};
+    const t=totalDetalle(det);
+    const el=document.getElementById('plTotal');if(el)el.textContent=money(t);
+    const bill=evalMonto((document.getElementById('plBill')||{}).value);
+    const d=document.getElementById('plDiff');
+    if(d){
+      if(!bill||isNaN(bill)){d.textContent='';d.style.color='';}
+      else if(Math.abs(bill-t)<0.005){d.textContent='✓ Cuadra con el recibo.';d.style.color='#86efac';}
+      else d.textContent='⚠️ Faltan '+money(bill-t)+' por repartir (o sobran, si es negativo).',d.style.color='#f0dca6';
+    }
+    body.querySelectorAll('[data-entre]').forEach(c=>{if(!fEntre)c.classList.toggle('on',(fPlatos[c.dataset.entre]||0)>0);});
+  };
+  body.querySelectorAll('[data-plato]').forEach(el=>el.oninput=()=>{
+    const v=evalMonto(el.value);
+    fPlatos[el.dataset.plato]=(isNaN(v)||v<=0)?0:v;
+    el.style.borderColor=isNaN(v)?'#fb7185':'';
+    pintaTotal();
+  });
+  const pc=document.getElementById('plComp');
+  if(pc)pc.oninput=()=>{const v=evalMonto(pc.value);fComp=(isNaN(v)||v<0)?0:v;pc.style.borderColor=isNaN(v)?'#fb7185':'';pintaTotal();};
+  const pb=document.getElementById('plBill');
+  if(pb)pb.oninput=pintaTotal;
+  body.querySelectorAll('[data-entre]').forEach(el=>el.onclick=()=>{
+    if(!fEntre)fEntre=new Set(entreEfectivo());
+    const id=el.dataset.entre;
+    if(fEntre.has(id))fEntre.delete(id);else fEntre.add(id);
+    el.classList.toggle('on');pintaTotal();
+  });
   const add=document.getElementById('gAddBtn');
   if(add)add.onclick=()=>{
     const desc=document.getElementById('gDesc').value.trim();
-    let raw=document.getElementById('gAmt').value.trim();
-    if(raw.indexOf(',')>=0) raw=raw.replace(/\./g,'').replace(',','.');
-    const amt=parseFloat(raw);
     const date=document.getElementById('gDate').value||new Date().toISOString().slice(0,10);
-    if(!amt||amt<=0){toast('Pon un monto válido.',true);return;}
-    if(fFor.size===0){toast('Elige al menos una persona en «¿Para quién?».',true);return;}
-    const forWhom=fFor.size===PEOPLE.length?[]:[...fFor];
-    const ge={id:'e'+Date.now()+Math.floor(Math.random()*1000),date,desc,amount:amt,paidBy:fPaidBy,cat:fCat,forWhom,
+    let amt,forWhom,detalle=null;
+    if(fModo==='platos'){
+      detalle={platos:{},compartido:{monto:Math.round(fComp*100)/100,entre:entreEfectivo()}};
+      PEOPLE.forEach(p=>{const v=fPlatos[p.id]||0;if(v>0)detalle.platos[p.id]=Math.round(v*100)/100;});
+      amt=Math.round(totalDetalle(detalle)*100)/100;
+      forWhom=Object.keys(montosFinales(detalle));
+      if(!(amt>0)){toast('Pon al menos lo que consumió una persona.',true);return;}
+      if(!forWhom.length){toast('Marca entre quiénes va lo compartido.',true);return;}
+    }else{
+      let raw=document.getElementById('gAmt').value.trim();
+      if(raw.indexOf(',')>=0) raw=raw.replace(/\./g,'').replace(',','.');
+      amt=parseFloat(raw);
+      if(!amt||amt<=0){toast('Pon un monto válido.',true);return;}
+      if(fFor.size===0){toast('Elige al menos una persona en «¿Para quién?».',true);return;}
+      forWhom=fFor.size===PEOPLE.length?[]:[...fFor];
+    }
+    const ge={id:'e'+Date.now()+Math.floor(Math.random()*1000),date,desc,amount:amt,paidBy:fPaidBy,cat:fCat,forWhom,detalle,
       ref:(gPrefill&&gPrefill.ref)||null,base:(gPrefill&&gPrefill.base)||null,por:yo||null,anulado:false,anuladoPor:null};
     expenses.push(ge);gPrefill=null;fFor=new Set(PEOPLE.map(p=>p.id));fCat='normal';
+    fModo='igual';fPlatos={};fComp=0;fEntre=null;
     saveG();renderPanel();body.scrollTop=0;sbIns('gastos',gToRow(ge));
     toast('Registrado ✓ · '+unitById(ge.paidBy).short+' puso '+money(ge.amount));
   };
@@ -1323,8 +1448,8 @@ let sb=null;
 try{ if(window.supabase&&window.supabase.createClient) sb=window.supabase.createClient(SB_URL,SB_KEY); }catch(e){ sb=null; }
 const numN=v=>(v===null||v===undefined||v==='')?null:Number(v);
 /* gasto <-> fila tabla gastos */
-const gToRow=e=>({id:e.id,fecha:e.date,descripcion:e.desc||'',monto:e.amount,pago:e.paidBy,tipo:e.cat||'normal',para:(e.forWhom&&e.forWhom.length)?e.forWhom:[],ref:e.ref||null,por:e.por||null,anulado:!!e.anulado,anulado_por:e.anuladoPor||null});
-const gFromRow=r=>({id:r.id,date:r.fecha,desc:r.descripcion||'',amount:Number(r.monto),paidBy:r.pago,cat:r.tipo||'normal',forWhom:Array.isArray(r.para)?r.para:[],ref:r.ref||null,por:r.por||null,anulado:!!r.anulado,anuladoPor:r.anulado_por||null});
+const gToRow=e=>({id:e.id,fecha:e.date,descripcion:e.desc||'',monto:e.amount,pago:e.paidBy,tipo:e.cat||'normal',para:(e.forWhom&&e.forWhom.length)?e.forWhom:[],ref:e.ref||null,por:e.por||null,anulado:!!e.anulado,anulado_por:e.anuladoPor||null,detalle:e.detalle||null});
+const gFromRow=r=>({id:r.id,date:r.fecha,desc:r.descripcion||'',amount:Number(r.monto),paidBy:r.pago,cat:r.tipo||'normal',forWhom:Array.isArray(r.para)?r.para:[],ref:r.ref||null,por:r.por||null,anulado:!!r.anulado,anuladoPor:r.anulado_por||null,detalle:r.detalle||null});
 /* casa <-> fila tabla alojamientos */
 const sToRow=s=>({id:s.id,base:s.base,nombre:s.name||'',url:s.url||'',precio:s.price,habitaciones:numN(s.rooms),banos:numN(s.baths),capacidad:numN(s.cap),parqueo:!!s.parking,rating:numN(s.rating),notas:s.notes||'',foto:s.foto||null,extras:Array.isArray(s.extras)?s.extras:[],reservada:!!s.reservada,invite:s.invite||null});
 const sFromRow=r=>({id:r.id,base:r.base,name:r.nombre||'',url:r.url||'',price:Number(r.precio),rooms:numN(r.habitaciones),baths:numN(r.banos),cap:numN(r.capacidad),parking:r.parqueo!==false,rating:numN(r.rating),notes:r.notas||'',foto:r.foto||null,extras:Array.isArray(r.extras)?r.extras:[],reservada:!!r.reservada,invite:r.invite||null,elegida:!!r.elegida});
