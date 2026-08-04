@@ -171,6 +171,7 @@
     .gform input{font-size:16px;padding:13px 12px}  /* 16px evita el zoom automático de iOS */
     .gform label{font-size:11px}
     .gchip{padding:10px 14px;font-size:13px}
+    .mtx th,.mtx td{padding:13px 9px}
     .chip,.stopchip{padding:8px 13px;font-size:12px}
     .pill{padding:10px 14px;font-size:12.5px}
     .ddnav button{padding:14px 10px;font-size:13px}
@@ -363,6 +364,22 @@
   .mv.void .mvd,.mv.void .mva{text-decoration:line-through;color:var(--muted)}
   .voidtag{font-size:8.5px;font-weight:800;color:#08111f;background:#fb7185;border-radius:5px;padding:2px 5px;margin-left:6px;vertical-align:middle;letter-spacing:.03em}
   .mvundo{width:100%;margin-top:10px;border:1px solid rgba(56,189,248,.35);background:transparent;color:var(--accent);border-radius:9px;padding:10px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer}
+  .mtx td[data-cell]{cursor:pointer;border-radius:6px;-webkit-tap-highlight-color:transparent}
+  .mtx td[data-cell]:active{background:rgba(56,189,248,.14)}
+  .mtx td.sel{background:rgba(56,189,248,.18);color:var(--accent);font-weight:800;box-shadow:inset 0 0 0 1px rgba(56,189,248,.45)}
+  .mtxdet{margin-top:12px;background:var(--bg);border:1px solid rgba(56,189,248,.3);border-radius:12px;padding:10px 12px}
+  .dthd{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:800;color:var(--accent);padding-bottom:8px;border-bottom:1px solid var(--line);margin-bottom:4px}
+  .dthd span{flex:1;line-height:1.35}
+  .dthd button{flex:none;border:0;background:transparent;color:var(--muted);font-size:17px;cursor:pointer;line-height:1;padding:4px 6px}
+  .dtr{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid var(--line)}
+  .dtr:last-child{border-bottom:0}
+  .dtr .dti{flex:none;width:20px;text-align:center;font-size:15px}
+  .dtr .dtinfo{flex:1;min-width:0;display:flex;flex-direction:column}
+  .dtr .dtd{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dtr .dtm{font-size:10.5px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dtr .dta{font-size:13.5px;font-weight:800;white-space:nowrap}
+  .dtr.tot{border-top:1px solid var(--line);margin-top:2px}
+  .dtr.tot .dtd,.dtr.tot .dta{color:var(--accent)}
   .gcancel{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:10px;padding:11px;font-size:12.5px;font-weight:700;font-family:inherit;cursor:pointer}
 </style>
 </head>
@@ -613,6 +630,7 @@ let fPaidBy=yo||'A';
 let fCat='normal';
 let fFor=new Set(PEOPLE.map(p=>p.id));
 let gPrefill=null;   /* pendiente de efectivo que se está registrando */
+let mtxSel=null;     /* celda abierta de la matriz: {de, para} ('*' = todo lo que puso) */
 let gOpenForm=false; /* abrir el formulario al redibujar */
 function saveG(){try{localStorage.setItem(GKEY,JSON.stringify(expenses));}catch(e){}}
 const unitById=id=>UNITS.find(u=>u.id===id);
@@ -760,6 +778,32 @@ function filaMovimiento(m){
                    :`<button class="mvdel" data-void="${m.id}">🚫 Anular este gasto</button>`)}
     </div></details>`;
 }
+/* Qué compras concretas suman el total de una celda de la matriz. */
+function detalleCelda(){
+  if(!mtxSel)return '';
+  const {de,para}=mtxSel, todos=para==='*';
+  const filas=movimientos().filter(m=>!m.anulado&&m.paidBy===de).map(m=>{
+    const sp=repartir(m.amount,m.cat,m.base,m.forWhom);
+    return {m,v:todos?(sp.A+sp.B+sp.K):sp[para]};
+  }).filter(x=>x.v>0.005).sort((a,b)=>b.v-a.v);
+  const tot=filas.reduce((t,x)=>t+x.v,0);
+  const titulo=todos?`Todo lo que ha puesto ${unitById(de).name}`
+    :(de===para?`Lo que ${unitById(de).short} ha pagado de lo suyo`
+               :`Lo que ${unitById(de).short} ha pagado por ${unitById(para).short}`);
+  const rows=filas.map(x=>{
+    const quien=(x.m.forWhom&&x.m.forWhom.length)
+      ? x.m.forWhom.map(id=>(PEOPLE.find(p=>p.id===id)||{}).name).filter(Boolean).join(', '):'los 8';
+    return `<div class="dtr"><span class="dti">${x.m.icon}</span>
+      <span class="dtinfo"><span class="dtd">${x.m.desc||'(sin nombre)'}</span>
+        <span class="dtm">${x.m.fechaTxt||''} · gasto de ${money(x.m.amount)} para ${quien}</span></span>
+      <span class="dta">${money(x.v)}</span></div>`;
+  }).join('');
+  return `<div class="mtxdet" id="mtxDet">
+    <div class="dthd"><span>${titulo}</span><button id="mtxClose" aria-label="Cerrar">✕</button></div>
+    ${rows||'<div class="stextranote" style="margin:8px 0">Todavía no hay nada aquí.</div>'}
+    <div class="dtr tot"><span class="dti"></span><span class="dtinfo"><span class="dtd">Total</span></span><span class="dta">${money(tot)}</span></div>
+  </div>`;
+}
 function renderGastos(){
   const {paid,owed,bal,matriz}=computeG();
   const cards=UNITS.map(u=>{
@@ -815,15 +859,17 @@ function renderGastos(){
   const lista=movs.map(filaMovimiento).join('');
 
   /* Transparencia: quién ha pagado por quién */
+  const sel=(d,p)=>(mtxSel&&mtxSel.de===d&&mtxSel.para===p)?' sel':'';
   const filas=UNITS.map(p=>`<tr><th>${p.short}</th>${UNITS.map(b=>{
       const v=matriz[p.id][b.id];
-      return `<td class="${p.id===b.id?'self':''}">${v>0.005?money(v):'—'}</td>`;
-    }).join('')}<td class="tot">${money(UNITS.reduce((t,b)=>t+matriz[p.id][b.id],0))}</td></tr>`).join('');
-  const matrizHtml=`<details class="fold"><summary>👀 Quién ha pagado por quién</summary>
-    <div style="padding:4px 13px 12px;overflow-x:auto">
-      <table class="mtx"><thead><tr><th>pagó ↓ · para →</th>${UNITS.map(u=>`<th>${u.short}</th>`).join('')}<th>total</th></tr></thead>
-      <tbody>${filas}</tbody></table>
-      <div class="stextranote">Cada celda es cuánto ha cubierto esa familia del consumo de la otra. La diagonal es lo que cada uno pagó de lo suyo.</div>
+      return `<td class="${p.id===b.id?'self':''}${sel(p.id,b.id)}" data-cell="${p.id}|${b.id}">${v>0.005?money(v):'—'}</td>`;
+    }).join('')}<td class="tot${sel(p.id,'*')}" data-cell="${p.id}|*">${money(UNITS.reduce((t,b)=>t+matriz[p.id][b.id],0))}</td></tr>`).join('');
+  const matrizHtml=`<details class="fold"${mtxSel?' open':''}><summary>👀 Quién ha pagado por quién</summary>
+    <div style="padding:4px 13px 12px">
+      <div style="overflow-x:auto"><table class="mtx"><thead><tr><th>pagó ↓ · para →</th>${UNITS.map(u=>`<th>${u.short}</th>`).join('')}<th>total</th></tr></thead>
+      <tbody>${filas}</tbody></table></div>
+      <div class="stextranote">Cada celda es cuánto ha cubierto esa familia del consumo de la otra. La diagonal es lo que cada uno pagó de lo suyo. <b>Toca cualquier número para ver de qué compras sale.</b></div>
+      ${detalleCelda()}
     </div></details>`;
 
   const reglas=`<details class="fold"><summary>📏 Las reglas del reparto</summary>
@@ -906,6 +952,16 @@ function bindGastos(){
     saveG();renderPanel();sbUpd('gastos',e.id,{anulado:false,anulado_por:null});
     toast('Reactivado ✓');
   });
+  /* Matriz: tocar una celda muestra las compras que suman ese total */
+  body.querySelectorAll('[data-cell]').forEach(el=>el.onclick=()=>{
+    const [de,para]=el.dataset.cell.split('|');
+    mtxSel=(mtxSel&&mtxSel.de===de&&mtxSel.para===para)?null:{de,para};
+    renderPanel();
+    const d=document.getElementById('mtxDet');
+    if(d)d.scrollIntoView({block:'nearest',behavior:'smooth'});
+  });
+  const mtxClose=document.getElementById('mtxClose');
+  if(mtxClose)mtxClose.onclick=()=>{mtxSel=null;renderPanel();};
   const yoChg=document.getElementById('yoChg'),yoSet=document.getElementById('yoSet');
   if(yoChg)yoChg.onclick=showWho;
   if(yoSet)yoSet.onclick=showWho;
